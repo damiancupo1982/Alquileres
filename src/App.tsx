@@ -6,6 +6,7 @@ import TenantsManager from './components/TenantsManager';
 import ReceiptsManager from './components/ReceiptsManager';
 import PaymentsHistory from './components/PaymentsHistory';
 import CashRegister from './components/CashRegister';
+import DataPortability from './components/DataPortability';
 
 type TabType = 'dashboard' | 'properties' | 'tenants' | 'receipts' | 'history' | 'cash';
 
@@ -445,6 +446,18 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderContent()}
       </main>
+
+      {/* Data Portability Component */}
+      <DataPortability
+        properties={properties}
+        setProperties={setProperties}
+        tenants={tenants}
+        setTenants={setTenants}
+        receipts={receipts}
+        setReceipts={setReceipts}
+        cashMovements={cashMovements}
+        setCashMovements={setCashMovements}
+      />
     </div>
   );
 }
