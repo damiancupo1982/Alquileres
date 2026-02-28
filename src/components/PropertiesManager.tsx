@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { Plus, Building2, MapPin, Edit, Trash2, Eye, Calendar, FileText, Filter, Home, Users as UsersIcon } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  Plus,
+  Building2,
+  MapPin,
+  Edit,
+  Trash2,
+  Eye,
+  Calendar,
+  Filter,
+  Home,
+  Users as UsersIcon,
+} from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { Property } from '../App';
 
@@ -7,6 +18,33 @@ interface PropertiesManagerProps {
   properties: Property[];
   setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
 }
+
+// ===== Helpers a prueba de datos incompletos =====
+const safeText = (v: unknown, fallback = '') => {
+  const s = String(v ?? '').trim();
+  return s || fallback;
+};
+
+const safeTitle = (v: unknown, fallback = '-') => {
+  const s = safeText(v, '');
+  if (!s) return fallback;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+const toNumberSafe = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (!t) return 0;
+    const n = Number(t.replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (v == null) return 0;
+  const n = Number(v as any);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const safeMoney = (v: unknown) => toNumberSafe(v).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 
 const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setProperties }) => {
   const [showModal, setShowModal] = useState(false);
@@ -24,46 +62,47 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     nextUpdateDate: '',
     contractStart: '',
     contractEnd: '',
-    notes: ''
+    notes: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const newProperty: Property = {
       id: editingProperty ? editingProperty.id : Date.now(),
-      name: formData.name,
+      name: safeText(formData.name),
       type: formData.type,
-      building: formData.building,
-      address: formData.address,
-      rent: parseFloat(formData.rent),
-      expenses: parseFloat(formData.expenses),
-      nextUpdateDate: formData.nextUpdateDate,
+      building: safeText(formData.building),
+      address: safeText(formData.address),
+      // si vienen vacíos, quedan en 0 (no NaN)
+      rent: toNumberSafe(formData.rent),
+      expenses: toNumberSafe(formData.expenses),
+      nextUpdateDate: formData.nextUpdateDate || '',
       tenant: editingProperty?.tenant || null,
       status: editingProperty?.status || 'disponible',
-      contractStart: formData.contractStart,
-      contractEnd: formData.contractEnd,
+      contractStart: formData.contractStart || '',
+      contractEnd: formData.contractEnd || '',
       lastUpdated: new Date().toISOString().split('T')[0],
-      notes: formData.notes
+      notes: formData.notes || '',
     };
 
     if (editingProperty) {
-      setProperties(properties.map(p => p.id === editingProperty.id ? newProperty : p));
+      setProperties(properties.map((p) => (p.id === editingProperty.id ? newProperty : p)));
     } else {
       setProperties([...properties, newProperty]);
     }
 
-    setFormData({ 
-      name: '', 
-      type: 'departamento', 
-      building: '', 
-      address: '', 
-      rent: '', 
-      expenses: '', 
+    setFormData({
+      name: '',
+      type: 'departamento',
+      building: '',
+      address: '',
+      rent: '',
+      expenses: '',
       nextUpdateDate: '',
-      contractStart: '', 
-      contractEnd: '', 
-      notes: '' 
+      contractStart: '',
+      contractEnd: '',
+      notes: '',
     });
     setShowModal(false);
     setEditingProperty(null);
@@ -72,44 +111,48 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
   const handleEdit = (property: Property) => {
     setEditingProperty(property);
     setFormData({
-      name: property.name,
-      type: property.type,
-      building: property.building,
-      address: property.address,
-      rent: property.rent.toString(),
-      expenses: property.expenses.toString(),
-      nextUpdateDate: property.nextUpdateDate,
-      contractStart: property.contractStart,
-      contractEnd: property.contractEnd,
-      notes: property.notes
+      name: safeText((property as any)?.name),
+      type: ((property as any)?.type ?? 'departamento') as Property['type'],
+      building: safeText((property as any)?.building),
+      address: safeText((property as any)?.address),
+      rent: String(toNumberSafe((property as any)?.rent)),
+      expenses: String(toNumberSafe((property as any)?.expenses)),
+      nextUpdateDate: safeText((property as any)?.nextUpdateDate),
+      contractStart: safeText((property as any)?.contractStart),
+      contractEnd: safeText((property as any)?.contractEnd),
+      notes: safeText((property as any)?.notes),
     });
     setShowModal(true);
   };
 
   const handleDelete = (id: number) => {
     if (confirm('¿Está seguro de eliminar esta propiedad?')) {
-      setProperties(properties.filter(p => p.id !== id));
+      setProperties(properties.filter((p) => p.id !== id));
     }
   };
 
   const getStatusColor = (status: Property['status']) => {
     switch (status) {
-      case 'ocupado': return 'bg-green-100 text-green-800';
-      case 'disponible': return 'bg-blue-100 text-blue-800';
-      case 'mantenimiento': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'ocupado':
+        return 'bg-green-100 text-green-800';
+      case 'disponible':
+        return 'bg-blue-100 text-blue-800';
+      case 'mantenimiento':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getTypeLabel = (type: Property['type']) => {
-    const labels = {
+  const getTypeLabel = (type: Property['type'] | any) => {
+    const labels: Record<string, string> = {
       departamento: 'Departamento',
       galpon: 'Galpón',
       local: 'Local',
       oficina: 'Oficina',
-      otro: 'Otro'
+      otro: 'Otro',
     };
-    return labels[type];
+    return labels[String(type ?? 'otro')] ?? 'Otro';
   };
 
   const handleDragEnd = (result: any) => {
@@ -122,23 +165,26 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     setProperties(items);
   };
 
-  // Filtrar propiedades según el estado seleccionado
-  const filteredProperties = properties.filter(property => {
-    if (filterStatus === 'all') return true;
-    return property.status === filterStatus;
-  });
+  // Filtrar propiedades según el estado seleccionado (blindado)
+  const filteredProperties = useMemo(() => {
+    return (properties ?? []).filter((property: any) => {
+      if (filterStatus === 'all') return true;
+      return property?.status === filterStatus;
+    });
+  }, [properties, filterStatus]);
 
-  // Agrupar propiedades por edificio
-  const propertiesByBuilding = properties.reduce((acc, property) => {
-    if (!acc[property.building]) {
-      acc[property.building] = [];
-    }
-    acc[property.building].push(property);
-    return acc;
-  }, {} as Record<string, Property[]>);
+  // Agrupar propiedades por edificio (blindado)
+  const propertiesByBuilding = useMemo(() => {
+    return (properties ?? []).reduce((acc, property: any) => {
+      const buildingKey = safeText(property?.building, 'Sin edificio');
+      if (!acc[buildingKey]) acc[buildingKey] = [];
+      acc[buildingKey].push(property);
+      return acc;
+    }, {} as Record<string, Property[]>);
+  }, [properties]);
 
   const getStatusCount = (status: Property['status']) => {
-    return properties.filter(p => p.status === status).length;
+    return (properties ?? []).filter((p: any) => p?.status === status).length;
   };
 
   return (
@@ -151,17 +197,17 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
         </div>
         <button
           onClick={() => {
-            setFormData({ 
-              name: '', 
-              type: 'departamento', 
-              building: '', 
-              address: '', 
-              rent: '', 
-              expenses: '', 
+            setFormData({
+              name: '',
+              type: 'departamento',
+              building: '',
+              address: '',
+              rent: '',
+              expenses: '',
               nextUpdateDate: '',
-              contractStart: '', 
-              contractEnd: '', 
-              notes: '' 
+              contractStart: '',
+              contractEnd: '',
+              notes: '',
             });
             setEditingProperty(null);
             setShowModal(true);
@@ -183,9 +229,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
               <button
                 onClick={() => setFilterStatus('all')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  filterStatus === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  filterStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Todas ({properties.length})
@@ -203,9 +247,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
               <button
                 onClick={() => setFilterStatus('ocupado')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  filterStatus === 'ocupado'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  filterStatus === 'ocupado' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Ocupadas ({getStatusCount('ocupado')})
@@ -229,9 +271,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             <button
               onClick={() => setViewMode('grid')}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Home className="h-4 w-4 inline mr-1" />
@@ -240,9 +280,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             <button
               onClick={() => setViewMode('building')}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'building'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'building' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Building2 className="h-4 w-4 inline mr-1" />
@@ -254,17 +292,16 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
 
       {/* Properties Display */}
       {viewMode === 'grid' ? (
-        /* Grid View with Drag and Drop */
         <DragDropContext onDragEnd={handleDragEnd}>
           <Droppable droppableId="properties" direction="horizontal">
             {(provided) => (
-              <div 
+              <div
                 {...provided.droppableProps}
                 ref={provided.innerRef}
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
               >
-                {filteredProperties.map((property, index) => (
-                  <Draggable key={property.id.toString()} draggableId={property.id.toString()} index={index}>
+                {filteredProperties.map((property: any, index) => (
+                  <Draggable key={String(property?.id)} draggableId={String(property?.id)} index={index}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -277,40 +314,44 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                         <div className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{property.name}</h3>
-                              <p className="text-sm text-gray-500">{getTypeLabel(property.type)}</p>
-                              <p className="text-sm text-blue-600 font-medium">{property.building}</p>
+                              <h3 className="text-lg font-semibold text-gray-900">{safeText(property?.name, 'Sin nombre')}</h3>
+                              <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
+                              <p className="text-sm text-blue-600 font-medium">{safeText(property?.building, 'Sin edificio')}</p>
                             </div>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(property.status)}`}>
-                              {property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                (property?.status ?? 'disponible') as Property['status']
+                              )}`}
+                            >
+                              {safeTitle(property?.status, 'Disponible')}
                             </span>
                           </div>
 
                           <div className="space-y-3">
                             <div className="flex items-center text-gray-600">
                               <MapPin className="h-4 w-4 mr-2" />
-                              <span className="text-sm">{property.address}</span>
+                              <span className="text-sm">{safeText(property?.address, '-')}</span>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <p className="text-xs text-gray-500">Alquiler</p>
-                                <p className="font-semibold text-gray-900">${property.rent.toLocaleString()}</p>
+                                <p className="font-semibold text-gray-900">${safeMoney(property?.rent)}</p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">Expensas</p>
-                                <p className="font-semibold text-gray-900">${property.expenses.toLocaleString()}</p>
+                                <p className="font-semibold text-gray-900">${safeMoney(property?.expenses)}</p>
                               </div>
                             </div>
 
-                            {property.tenant && (
+                            {property?.tenant && (
                               <div>
                                 <p className="text-xs text-gray-500">Inquilino</p>
                                 <p className="font-medium text-gray-900">{property.tenant}</p>
                               </div>
                             )}
 
-                            {property.contractStart && property.contractEnd && (
+                            {property?.contractStart && property?.contractEnd && (
                               <div className="flex items-center text-gray-600">
                                 <Calendar className="h-4 w-4 mr-2" />
                                 <span className="text-xs">
@@ -319,25 +360,21 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                               </div>
                             )}
 
-                            {property.notes && (
+                            {property?.notes && (
                               <div>
                                 <p className="text-xs text-gray-500">Notas</p>
                                 <p className="text-sm text-gray-700 truncate">{property.notes}</p>
                               </div>
                             )}
 
-                            {property.nextUpdateDate && (
+                            {property?.nextUpdateDate && (
                               <div className="flex items-center text-gray-600">
                                 <Calendar className="h-4 w-4 mr-2" />
-                                <span className="text-xs">
-                                  Próxima actualización: {property.nextUpdateDate}
-                                </span>
+                                <span className="text-xs">Próxima actualización: {property.nextUpdateDate}</span>
                               </div>
                             )}
 
-                            <div className="text-xs text-gray-500">
-                              Actualizado: {property.lastUpdated}
-                            </div>
+                            <div className="text-xs text-gray-500">Actualizado: {safeText(property?.lastUpdated, '-')}</div>
                           </div>
 
                           <div className="flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-100">
@@ -368,7 +405,6 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
           </Droppable>
         </DragDropContext>
       ) : (
-        /* Building View */
         <div className="space-y-6">
           {Object.entries(propertiesByBuilding).map(([building, buildingProperties]) => (
             <div key={building} className="bg-white rounded-xl shadow-sm border border-gray-200">
@@ -379,62 +415,68 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">{building}</h3>
                       <p className="text-sm text-gray-500">
-                        {buildingProperties.length} propiedades • 
-                        {buildingProperties.filter(p => p.status === 'ocupado').length} ocupadas • 
-                        {buildingProperties.filter(p => p.status === 'disponible').length} disponibles
+                        {buildingProperties.length} propiedades • {buildingProperties.filter((p: any) => p?.status === 'ocupado').length} ocupadas •{' '}
+                        {buildingProperties.filter((p: any) => p?.status === 'disponible').length} disponibles
                       </p>
                     </div>
                   </div>
                   <div className="flex space-x-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       <UsersIcon className="h-3 w-3 mr-1" />
-                      {buildingProperties.filter(p => p.status === 'ocupado').length} ocupadas
+                      {buildingProperties.filter((p: any) => p?.status === 'ocupado').length} ocupadas
                     </span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Home className="h-3 w-3 mr-1" />
-                      {buildingProperties.filter(p => p.status === 'disponible').length} disponibles
+                      {buildingProperties.filter((p: any) => p?.status === 'disponible').length} disponibles
                     </span>
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {buildingProperties.map((property) => (
-                    <div key={property.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                  {buildingProperties.map((property: any) => (
+                    <div
+                      key={property.id}
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h4 className="font-medium text-gray-900">{property.name}</h4>
-                          <p className="text-sm text-gray-500">{getTypeLabel(property.type)}</p>
+                          <h4 className="font-medium text-gray-900">{safeText(property?.name, 'Sin nombre')}</h4>
+                          <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
                         </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(property.status)}`}>
-                          {property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                            (property?.status ?? 'disponible') as Property['status']
+                          )}`}
+                        >
+                          {safeTitle(property?.status, 'Disponible')}
                         </span>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Alquiler:</span>
-                          <span className="font-medium">${property.rent.toLocaleString()}</span>
+                          <span className="font-medium">${safeMoney(property?.rent)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Expensas:</span>
-                          <span className="font-medium">${property.expenses.toLocaleString()}</span>
+                          <span className="font-medium">${safeMoney(property?.expenses)}</span>
                         </div>
-                        {property.tenant && (
+                        {property?.tenant && (
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Inquilino:</span>
                             <span className="font-medium text-blue-600">{property.tenant}</span>
                           </div>
                         )}
-                        {property.nextUpdateDate && (
+                        {property?.nextUpdateDate && (
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Próx. actualización:</span>
                             <span className="text-xs text-gray-600">{property.nextUpdateDate}</span>
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex justify-end space-x-1 mt-3 pt-3 border-t border-gray-100">
                         <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
                           <Eye className="h-4 w-4" />
@@ -466,10 +508,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
           <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay propiedades</h3>
           <p className="text-gray-500">
-            {filterStatus === 'all' 
-              ? 'No hay propiedades registradas.' 
-              : `No hay propiedades con estado "${filterStatus}".`
-            }
+            {filterStatus === 'all' ? 'No hay propiedades registradas.' : `No hay propiedades con estado "${filterStatus}".`}
           </p>
         </div>
       )}
@@ -607,10 +646,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                   {editingProperty ? 'Actualizar' : 'Agregar'}
                 </button>
               </div>
