@@ -103,58 +103,29 @@ const loadFromLocalStorage = (key: string, defaultValue: any) => {
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  
-  // Estados globales con persistencia
-  const [properties, setProperties] = useState<Property[]>(() => 
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [properties, setProperties] = useState<Property[]>(() =>
     loadFromLocalStorage('properties', [
     {
       id: 1,
       name: 'Departamento A-101',
       type: 'departamento',
-      building: 'Edificio Central',
+      building: 'Ramos Mejia',
       address: 'Av. Corrientes 1234, CABA',
-      rent: 25000,
-      expenses: 3000,
+      rent: 50000,
+      expenses: 5000,
+      nextUpdateDate: '2025-03-01',
       tenant: 'Juan Pérez',
       status: 'ocupado',
       contractStart: '2024-01-15',
       contractEnd: '2025-01-15',
-      lastUpdated: '2025-01-15',
-      notes: 'Contrato renovado automáticamente'
+      lastUpdated: '2025-01-12',
+      notes: 'Departamento con balcón'
     },
     {
       id: 2,
-      name: 'Galpón B-205',
-      type: 'galpon',
-      building: 'Complejo Industrial',
-      address: 'Parque Industrial Sur, Lote 15',
-      rent: 45000,
-      expenses: 5000,
-      tenant: 'María García',
-      status: 'ocupado',
-      contractStart: '2023-06-01',
-      contractEnd: '2025-06-01',
-      lastUpdated: '2024-12-01',
-      notes: 'Inquilino de confianza, siempre paga puntual'
-    },
-    {
-      id: 3,
-      name: 'Local C-303',
-      type: 'local',
-      building: 'Centro Comercial',
-      address: 'Av. Santa Fe 2567, CABA',
-      rent: 35000,
-      expenses: 4000,
-      tenant: null,
-      status: 'disponible',
-      contractStart: '',
-      contractEnd: '',
-      lastUpdated: '2025-01-10',
-      notes: 'Disponible para alquiler inmediato'
-    },
-    {
-      id: 4,
-      name: 'Oficina D-401',
+      name: 'Oficina B-201',
       type: 'oficina',
       building: 'Torre Empresarial',
       address: 'Av. Libertador 5678, CABA',
@@ -189,108 +160,19 @@ function App() {
       },
       balance: 0,
       status: 'activo'
-    },
-    {
-      id: 2,
-      name: 'María García',
-      email: 'maria.garcia@email.com',
-      phone: '+54 11 8765-4321',
-      propertyId: 2,
-      property: 'Galpón B-205',
-      contractStart: '2023-06-01',
-      contractEnd: '2025-06-01',
-      deposit: 90000,
-      guarantor: {
-        name: 'Carlos García',
-        email: 'carlos.garcia@email.com',
-        phone: '+54 11 8765-4322'
-      },
-      balance: 15000,
-      status: 'activo'
-    },
-    {
-      id: 3,
-      name: 'Carlos López',
-      email: 'carlos.lopez@email.com',
-      phone: '+54 11 5555-0000',
-      propertyId: null,
-      property: 'Local C-303',
-      contractStart: '2024-11-01',
-      contractEnd: '2025-01-20',
-      deposit: 70000,
-      guarantor: {
-        name: 'Ana López',
-        email: 'ana.lopez@email.com',
-        phone: '+54 11 5555-0001'
-      },
-      balance: 22000,
-      status: 'vencido'
     }
   ])
   );
 
   const [receipts, setReceipts] = useState<Receipt[]>(() =>
-    loadFromLocalStorage('receipts', [
-    {
-      id: 1,
-      receiptNumber: 'REC-2025-001',
-      tenant: 'Juan Pérez',
-      property: 'Departamento A-101',
-      building: 'Edificio Central',
-      month: 'Enero',
-      year: 2025,
-      rent: 25000,
-      expenses: 3000,
-      otherCharges: [
-        { description: 'Limpieza adicional', amount: 1500 }
-      ],
-      previousBalance: 0,
-      total: 29500,
-      paidAmount: 29500,
-      remainingBalance: 0,
-      currency: 'ARS',
-      paymentMethod: 'transferencia',
-      status: 'pagado',
-      dueDate: '2025-01-10',
-      createdDate: '2025-01-01'
-    }
-  ])
+    loadFromLocalStorage('receipts', [])
   );
 
   const [cashMovements, setCashMovements] = useState<CashMovement[]>(() =>
-    loadFromLocalStorage('cashMovements', [
-    {
-      id: 1,
-      type: 'income',
-      description: 'Pago alquiler - Juan Pérez',
-      amount: 29500,
-      currency: 'ARS',
-      date: '2025-01-15',
-      tenant: 'Juan Pérez',
-      property: 'Departamento A-101'
-    },
-    {
-      id: 2,
-      type: 'delivery',
-      description: 'Entrega al propietario',
-      amount: 15000,
-      currency: 'ARS',
-      date: '2025-01-10'
-    },
-    {
-      id: 3,
-      type: 'income',
-      description: 'Pago alquiler - Carlos López',
-      amount: 800,
-      currency: 'USD',
-      date: '2025-01-08',
-      tenant: 'Carlos López',
-      property: 'Local C-303'
-    }
-  ])
+    loadFromLocalStorage('cashMovements', [])
   );
 
-  // Guardar en localStorage cuando cambien los datos
+  // Guardar en localStorage cuando cambia el estado
   useEffect(() => {
     saveToLocalStorage('properties', properties);
   }, [properties]);
@@ -307,46 +189,21 @@ function App() {
     saveToLocalStorage('cashMovements', cashMovements);
   }, [cashMovements]);
 
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'properties', label: 'Propiedades', icon: Building2 },
-    { id: 'tenants', label: 'Inquilinos', icon: Users },
-    { id: 'receipts', label: 'Recibos', icon: Receipt },
-    { id: 'history', label: 'Historial', icon: Calendar },
-    { id: 'cash', label: 'Arqueo', icon: Wallet },
-  ] as const;
-
-  // Función para agregar movimiento de caja
-  const addCashMovement = (movement: Omit<CashMovement, 'id'>) => {
-    const newMovement: CashMovement = {
-      ...movement,
-      id: Date.now()
-    };
-    setCashMovements(prev => [newMovement, ...prev]);
-  };
-
-  // Función para actualizar saldo de inquilino
-  const updateTenantBalance = (tenantName: string, newBalance: number) => {
-    setTenants(prev => prev.map(tenant => 
-      tenant.name === tenantName 
-        ? { ...tenant, balance: newBalance }
-        : tenant
-    ));
-  };
-
-  // Función para actualizar propiedad cuando se asigna/cambia inquilino
   const updatePropertyTenant = (propertyId: number | null, tenantName: string | null, oldPropertyId?: number | null) => {
-    setProperties(prev => prev.map(property => {
-      // Liberar propiedad anterior
-      if (oldPropertyId && property.id === oldPropertyId) {
-        return { ...property, tenant: null, status: 'disponible' as const };
-      }
-      // Asignar nueva propiedad
-      if (property.id === propertyId) {
-        return { ...property, tenant: tenantName, status: 'ocupado' as const };
-      }
-      return property;
-    }));
+    if (oldPropertyId) {
+      setProperties(properties.map(p => p.id === oldPropertyId ? { ...p, tenant: null, status: 'disponible' } : p));
+    }
+    if (propertyId && tenantName) {
+      setProperties(properties.map(p => p.id === propertyId ? { ...p, tenant: tenantName, status: 'ocupado' } : p));
+    }
+  };
+
+  const addCashMovement = (movement: CashMovement) => {
+    setCashMovements([...cashMovements, movement]);
+  };
+
+  const updateTenantBalance = (tenantName: string, newBalance: number) => {
+    setTenants(tenants.map(t => t.name === tenantName ? { ...t, balance: newBalance } : t));
   };
 
   const renderContent = () => {
@@ -365,6 +222,7 @@ function App() {
           tenants={tenants} 
           setTenants={setTenants} 
           properties={properties}
+          receipts={receipts}
           updatePropertyTenant={updatePropertyTenant}
         />;
       case 'receipts':
@@ -384,7 +242,12 @@ function App() {
           setCashMovements={setCashMovements}
         />;
       default:
-        return <Dashboard tenants={tenants} receipts={receipts} properties={properties} />;
+        return <Dashboard 
+          tenants={tenants} 
+          receipts={receipts} 
+          properties={properties} 
+          setActiveTab={setActiveTab}
+        />;
     }
   };
 
@@ -400,44 +263,94 @@ function App() {
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="relative">
+              <div className="relative hidden md:block">
                 <Search className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Buscar..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+              <button className="p-2 text-gray-400 hover:text-gray-600">
                 <Bell className="h-6 w-6" />
-                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
+      {/* Navigation Tabs */}
+      <nav className="bg-white border-b border-gray-200 sticky top-16 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-                    activeTab === tab.id
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
+          <div className="flex space-x-8 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'dashboard'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <BarChart3 className="h-5 w-5 inline mr-2" />
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('properties')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'properties'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Building2 className="h-5 w-5 inline mr-2" />
+              Propiedades
+            </button>
+            <button
+              onClick={() => setActiveTab('tenants')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'tenants'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Users className="h-5 w-5 inline mr-2" />
+              Inquilinos
+            </button>
+            <button
+              onClick={() => setActiveTab('receipts')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'receipts'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Receipt className="h-5 w-5 inline mr-2" />
+              Recibos
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'history'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Calendar className="h-5 w-5 inline mr-2" />
+              Historial
+            </button>
+            <button
+              onClick={() => setActiveTab('cash')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                activeTab === 'cash'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              <Wallet className="h-5 w-5 inline mr-2" />
+              Arqueo
+            </button>
           </div>
         </div>
       </nav>
@@ -447,17 +360,8 @@ function App() {
         {renderContent()}
       </main>
 
-      {/* Data Portability Component */}
-      <DataPortability
-        properties={properties}
-        setProperties={setProperties}
-        tenants={tenants}
-        setTenants={setTenants}
-        receipts={receipts}
-        setReceipts={setReceipts}
-        cashMovements={cashMovements}
-        setCashMovements={setCashMovements}
-      />
+      {/* Data Portability */}
+      <DataPortability />
     </div>
   );
 }
