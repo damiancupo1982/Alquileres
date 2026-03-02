@@ -7,7 +7,8 @@ interface PaymentsHistoryProps {
 }
 
 const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedTenant, setSelectedTenant] = useState('');
@@ -38,6 +39,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
+  // Get unique years from receipts
+  const uniqueYears = [...new Set(receipts.map(r => r.year))].sort((a, b) => b - a);
+
   // Get unique values for filters
   const uniqueTenants = [...new Set(payments.map(p => p.tenant))].sort();
   const uniqueProperties = [...new Set(payments.map(p => p.property))].sort();
@@ -60,14 +64,27 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
   });
 
   const totalAmount = filteredPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  
+  // Calcular ingresos teóricos vs reales
   const monthlyStats = months.map(month => {
+    // Ingresos teóricos: todos los recibos del mes (pagados y no pagados)
+    const monthReceipts = receipts.filter(r => r.month === month && r.year === selectedYear);
+    const theoreticalIncome = monthReceipts.reduce((sum, r) => sum + (r.total || 0), 0);
+    
+    // Ingresos reales: solo los pagos confirmados
     const monthPayments = filteredPayments.filter(p => p.month === month);
+    const realIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+    
     return {
       month,
-      count: monthPayments.length,
-      total: monthPayments.reduce((sum, p) => sum + p.amount, 0)
+      theoreticalIncome,
+      realIncome,
+      count: monthPayments.length
     };
   });
+
+  // Encontrar el máximo para escalar el gráfico
+  const maxIncome = Math.max(...monthlyStats.map(s => s.theoreticalIncome), 1);
 
   const clearFilters = () => {
     setSelectedMonth('');
@@ -204,6 +221,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
     printWindow.document.close();
     printWindow.print();
   };
+
   const exportToCSV = () => {
     const headers = ['Fecha', 'Recibo', 'Inquilino', 'Propiedad', 'Edificio', 'Monto', 'Método', 'Estado'];
     const csvContent = [
@@ -282,9 +300,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value={2025}>2025</option>
-              <option value={2024}>2024</option>
-              <option value={2023}>2023</option>
+              {uniqueYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
             </select>
           </div>
 
@@ -386,23 +404,46 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
         </div>
       </div>
 
-      {/* Monthly Chart */}
+      {/* Monthly Chart - MEJORADO CON DOS BARRAS */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Ingresos Mensuales {selectedYear}</h3>
-        <div className="grid grid-cols-12 gap-2">
-          {monthlyStats.map((stat, index) => (
+        
+        {/* Leyenda */}
+        <div className="flex gap-6 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span className="text-sm text-gray-700">Ingreso Teórico</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span className="text-sm text-gray-700">Ingreso Real Cobrado</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-3">
+          {monthlyStats.map((stat) => (
             <div key={stat.month} className="text-center">
-              <div className="mb-2">
+              <div className="mb-2 flex gap-1 h-32 items-end justify-center">
+                {/* Barra Teórica (azul) */}
                 <div
-                  className="bg-blue-500 rounded-t"
+                  className="bg-blue-500 rounded-t w-3"
                   style={{
-                    height: `${Math.max((stat.total / Math.max(...monthlyStats.map(s => s.total))) * 100, 5)}px`,
-                    minHeight: '20px'
+                    height: `${Math.max((stat.theoreticalIncome / maxIncome) * 100, 5)}px`
                   }}
+                  title={`Teórico: $${(stat.theoreticalIncome / 1000).toFixed(1)}k`}
+                ></div>
+                {/* Barra Real (verde) */}
+                <div
+                  className="bg-green-500 rounded-t w-3"
+                  style={{
+                    height: `${Math.max((stat.realIncome / maxIncome) * 100, 5)}px`
+                  }}
+                  title={`Real: $${(stat.realIncome / 1000).toFixed(1)}k`}
                 ></div>
               </div>
               <p className="text-xs text-gray-600 mb-1">{stat.month.slice(0, 3)}</p>
-              <p className="text-xs font-semibold text-gray-900">${(stat.total / 1000).toFixed(0)}k</p>
+              <p className="text-xs font-semibold text-blue-600">${(stat.theoreticalIncome / 1000).toFixed(0)}k</p>
+              <p className="text-xs font-semibold text-green-600">${(stat.realIncome / 1000).toFixed(0)}k</p>
             </div>
           ))}
         </div>
