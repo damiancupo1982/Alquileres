@@ -13,7 +13,6 @@ React.useEffect(() => {
   console.log('Receipts:', receipts);
 }, [properties, tenants, receipts]);
 type TabType = 'dashboard' | 'properties' | 'tenants' | 'receipts' | 'history' | 'cash';
-
 // Interfaces globales
 export interface Tenant {
   id: number;
