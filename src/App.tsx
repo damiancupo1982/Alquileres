@@ -361,7 +361,16 @@ function App() {
       </main>
 
       {/* Data Portability */}
-{/* <DataPortability /> */}
+      <DataPortability
+        properties={properties}
+        setProperties={setProperties}
+        tenants={tenants}
+        setTenants={setTenants}
+        receipts={receipts}
+        setReceipts={setReceipts}
+        cashMovements={cashMovements}
+        setCashMovements={setCashMovements}
+      />
     </div>
   );
 }
