@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, DollarSign, Filter, Download } from 'lucide-react';
-import React, { useState } from 'react';
 import { Calendar, DollarSign, Filter, Download, TrendingUp, Search, Eye, Printer, X } from 'lucide-react';
 import { Receipt } from '../App';
 interface PaymentsHistoryProps {
