@@ -179,8 +179,9 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     setShowDetailModal(true);
   };
 
-  const getStatusColor = (status: Tenant['status']) => {
-    switch (status) {
+  const getStatusColor = (status: string | undefined) => {
+    const safeStatus = (status || 'activo') as Tenant['status'];
+    switch (safeStatus) {
       case 'activo': return 'bg-green-100 text-green-800';
       case 'vencido': return 'bg-red-100 text-red-800';
       case 'pendiente': return 'bg-yellow-100 text-yellow-800';
@@ -302,6 +303,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                 const prop = properties.find(p => p.id === tenant.propertyId);
                 const deposit = tenant.deposit || 0;
                 const guarantorName = tenant.guarantor?.name || '-';
+                const status = tenant.status || 'activo';
                 
                 return (
                   <tr key={`tenant-${tenant.id}`} className={`hover:bg-gray-50 ${balance > 0 ? 'bg-red-50' : ''}`}>
@@ -352,8 +354,8 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col space-y-2">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
-                          {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                         {balance > 0 && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
