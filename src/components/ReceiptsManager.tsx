@@ -94,6 +94,8 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
   // AUTO-RELLENAR cuando se selecciona inquilino
   const handleTenantChange = (tenantName: string) => {
     const selectedTenant = tenants.find((t) => t.name === tenantName);
+    
+    // IMPORTANTE: Buscar por el nombre de propiedad del inquilino, no por propertyId
     const selectedProperty = properties.find((p) => p.name === selectedTenant?.property);
 
     // Mes actual
@@ -113,8 +115,8 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
       property: selectedTenant?.property || '',
       month: currentMonth,
       year: currentYear,
-      rent: selectedProperty?.rent !== undefined ? String(selectedProperty?.rent) : '',
-      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty?.expenses) : '',
+      rent: selectedProperty?.rent !== undefined ? String(selectedProperty.rent) : '',
+      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty.expenses) : '',
       previousBalance: String(tenantBalance),
       dueDate,
     }));
@@ -128,8 +130,8 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     setFormData((prev) => ({
       ...prev,
       property: propertyName,
-      rent: selectedProperty?.rent !== undefined ? String(selectedProperty?.rent) : '',
-      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty?.expenses) : '',
+      rent: selectedProperty?.rent !== undefined ? String(selectedProperty.rent) : '',
+      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty.expenses) : '',
     }));
 
     maybeShowUpdateAlert(selectedProperty);
@@ -153,7 +155,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     const createdDate =
       editingReceipt?.createdDate || new Date().toISOString().split('T')[0];
 
-    // Determinar status: si se está creando ahora es "pendiente_confirmacion", si se edita mantiene su status
+    // Status: siempre "pendiente_confirmacion" para nuevos recibos
     const status = editingReceipt?.status || 'pendiente_confirmacion';
 
     const newReceipt: Receipt = {
@@ -238,6 +240,16 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     if (confirm('¿Está seguro de eliminar este recibo?')) {
       setReceipts((prev) => prev.filter((r) => r.id !== id));
     }
+  };
+
+  // Nueva función para confirmar recibo
+  const handleConfirmReceipt = (receipt: Receipt) => {
+    const confirmedReceipt: Receipt = {
+      ...receipt,
+      status: 'pendiente',
+    };
+
+    setReceipts((prev) => prev.map((r) => (r.id === receipt.id ? confirmedReceipt : r)));
   };
 
   const handlePayment = () => {
@@ -379,7 +391,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const isDraft = receipt.status === 'borrador';
+    const isDraft = receipt.status === 'borrador' || receipt.status === 'pendiente_confirmacion';
     const watermark = isDraft
       ? `
       <div style="position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; z-index:0; pointer-events:none;">
@@ -528,14 +540,16 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     switch (status) {
       case 'pagado':
         return 'bg-green-100 text-green-800';
-      case 'pendiente':
-        return 'bg-yellow-100 text-yellow-800';
       case 'confirmado':
         return 'bg-green-100 text-green-800';
+      case 'pendiente':
+        return 'bg-yellow-100 text-yellow-800';
       case 'vencido':
         return 'bg-red-100 text-red-800';
       case 'borrador':
+        return 'bg-gray-100 text-gray-800';
       case 'pendiente_confirmacion':
+        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -643,118 +657,133 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {(receipts || []).map((receipt) => (
-                <tr key={receipt.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <ReceiptIcon className="h-5 w-5 text-gray-400 mr-2" />
+              {/* Ordenar de más reciente a más antiguo */}
+              {[...(receipts || [])]
+                .sort((a, b) => b.id - a.id)
+                .map((receipt) => (
+                  <tr key={receipt.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <ReceiptIcon className="h-5 w-5 text-gray-400 mr-2" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {receipt.receiptNumber}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Vence: {receipt.dueDate || '-'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <User className="h-4 w-4 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-900">{receipt.tenant}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {receipt.receiptNumber}
+                          {receipt.property}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Vence: {receipt.dueDate || '-'}
-                        </div>
+                        <div className="text-sm text-gray-500">{receipt.building}</div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <User className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900">{receipt.tenant}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {receipt.property}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                        <span className="text-sm text-gray-900">
+                          {receipt.month} {receipt.year}
+                        </span>
                       </div>
-                      <div className="text-sm text-gray-500">{receipt.building}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-900">
-                        {receipt.month} {receipt.year}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {currencyFormatter(safeNumber(receipt.total), receipt.currency)}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {currencyFormatter(safeNumber(receipt.total), receipt.currency)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <span className="text-sm font-semibold text-green-600">
-                        {currencyFormatter(safeNumber(receipt.paidAmount), receipt.currency)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <span className="text-sm font-semibold text-green-600">
+                          {currencyFormatter(safeNumber(receipt.paidAmount), receipt.currency)}
+                        </span>
+                        {safeNumber(receipt.remainingBalance) > 0 && (
+                          <div className="text-xs text-red-600">
+                            Saldo:{' '}
+                            {currencyFormatter(
+                              safeNumber(receipt.remainingBalance),
+                              receipt.currency
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                          receipt.status
+                        )}`}
+                      >
+                        {getStatusLabel(receipt.status)}
                       </span>
-                      {safeNumber(receipt.remainingBalance) > 0 && (
-                        <div className="text-xs text-red-600">
-                          Saldo:{' '}
-                          {currencyFormatter(
-                            safeNumber(receipt.remainingBalance),
-                            receipt.currency
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                        receipt.status
-                      )}`}
-                    >
-                      {getStatusLabel(receipt.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => viewReceipt(receipt)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Ver recibo"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => printReceipt(receipt)}
-                        className="text-gray-400 hover:text-green-600 transition-colors"
-                        title="Imprimir recibo"
-                      >
-                        <Printer className="h-4 w-4" />
-                      </button>
-                      {(receipt.status === 'borrador' || receipt.status === 'pendiente_confirmacion' || receipt.status === 'pendiente') && (
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
                         <button
-                          onClick={() => handleEdit(receipt)}
+                          onClick={() => viewReceipt(receipt)}
                           className="text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Editar recibo"
+                          title="Ver recibo"
                         >
-                          <Edit className="h-4 w-4" />
+                          <Eye className="h-4 w-4" />
                         </button>
-                      )}
-                      {safeNumber(receipt.remainingBalance) > 0 && (
                         <button
-                          onClick={() => openPaymentModal(receipt)}
+                          onClick={() => printReceipt(receipt)}
                           className="text-gray-400 hover:text-green-600 transition-colors"
-                          title="Registrar pago"
+                          title="Imprimir recibo"
                         >
-                          <DollarSign className="h-4 w-4" />
+                          <Printer className="h-4 w-4" />
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(receipt.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                        title="Eliminar recibo"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        
+                        {/* Botón CONFIRMAR para recibos pendiente_confirmacion */}
+                        {receipt.status === 'pendiente_confirmacion' && (
+                          <button
+                            onClick={() => handleConfirmReceipt(receipt)}
+                            className="text-gray-400 hover:text-yellow-600 transition-colors"
+                            title="Confirmar recibo"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                        )}
+
+                        {(receipt.status === 'borrador' || receipt.status === 'pendiente_confirmacion' || receipt.status === 'pendiente') && (
+                          <button
+                            onClick={() => handleEdit(receipt)}
+                            className="text-gray-400 hover:text-blue-600 transition-colors"
+                            title="Editar recibo"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
+                        {safeNumber(receipt.remainingBalance) > 0 && (
+                          <button
+                            onClick={() => openPaymentModal(receipt)}
+                            className="text-gray-400 hover:text-green-600 transition-colors"
+                            title="Registrar pago"
+                          >
+                            <DollarSign className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(receipt.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          title="Eliminar recibo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               {(receipts || []).length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-8">
@@ -901,7 +930,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
                         previousBalance: e.target.value,
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-100"
                     disabled
                   />
                 </div>
@@ -1184,7 +1213,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
             {/* Receipt Preview */}
             <div className="border border-gray-300 rounded-lg p-6 mb-4 bg-gray-50">
-              {selectedReceipt.status === 'borrador' && (
+              {selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion' && (
                 <div className="text-center text-red-600 font-bold mb-4 p-2 bg-red-50 rounded">
                   *** RECIBO BORRADOR - NO VÁLIDO PARA PAGO ***
                 </div>
@@ -1307,7 +1336,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
               <div className="text-center text-sm text-gray-600 border-t border-gray-300 pt-4">
                 <p>Este recibo debe ser abonado antes del {selectedReceipt.dueDate || '-'}</p>
                 <p>Gracias por su puntualidad en el pago</p>
-                {selectedReceipt.status === 'borrador' && (
+                {selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion' && (
                   <p className="text-red-600 font-bold mt-2">*** ESTE ES UN RECIBO BORRADOR ***</p>
                 )}
               </div>
