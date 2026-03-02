@@ -13,7 +13,8 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
 
   // Filtrar recibos del inquilino actual
   const tenantReceipts = Array.isArray(receipts) ? receipts.filter(r => r?.tenant === tenant.name) : [];
-
+console.log('RECIBOS DEL INQUILINO:', JSON.stringify(tenantReceipts, null, 2));
+console.log('PRIMER RECIBO:', tenantReceipts[0]);
   // Calcular resumen de pagos
   const totalPaid = tenantReceipts
     .filter(r => r?.status === 'pagado' || r?.status === 'confirmado')
