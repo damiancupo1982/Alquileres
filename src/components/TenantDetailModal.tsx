@@ -27,7 +27,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
   const movements = [];
   let runningBalance = 0;
 
-  // Ordenar recibos cronológicamente
+  // Ordenar recibos cronológicamente (de más antiguo a más reciente para calcular saldos)
   const sortedReceipts = [...tenantReceipts].sort((a, b) => {
     const monthA = String(a.month).padStart(2, '0');
     const monthB = String(b.month).padStart(2, '0');
@@ -51,6 +51,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     movements.push({
       type: 'due',
       date: dueDate,
+      sortDate: new Date(`${receipt.year}-${monthStr}-10`),
       monthLabel: `${receipt.month} ${receipt.year}`,
       rent: rentAmount,
       expenses: expensesAmount,
@@ -58,7 +59,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
       previousBalance: runningBalance,
       payment: 0,
       status: receipt.status,
-      newBalance: runningBalance + totalDue // Después de vencer, suma la deuda
+      newBalance: runningBalance + totalDue
     });
 
     // RENGLÓN 2: PAGO
@@ -67,10 +68,11 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
       movements.push({
         type: 'payment',
         date: paymentDate,
+        sortDate: new Date(`${receipt.year}-${monthStr}-15`),
         monthLabel: 'PAGO',
         rent: 0,
         expenses: 0,
-        total: 0, // No mostrar en renglón de pago
+        total: 0,
         previousBalance: runningBalance + totalDue,
         payment: paymentMade,
         status: receipt.status,
@@ -78,9 +80,13 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
       });
       runningBalance = newBalance;
     } else {
-      // Si no hay pago, el saldo se mantiene con la deuda
       runningBalance = runningBalance + totalDue;
     }
+  });
+
+  // Ordenar movimientos por fecha DESCENDENTE (más reciente arriba)
+  const sortedMovements = [...movements].sort((a, b) => {
+    return b.sortDate.getTime() - a.sortDate.getTime();
   });
 
   return (
@@ -222,7 +228,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {movements.map((movement, idx) => {
+                      {sortedMovements.map((movement, idx) => {
                         const isFuture = movement.type === 'due';
                         const rowColor = movement.newBalance > 0 ? 'bg-red-50' : 'bg-green-50';
                         
