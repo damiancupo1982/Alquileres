@@ -23,37 +23,62 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     .filter(r => r?.status === 'pendiente' || r?.status === 'pendiente_confirmacion')
     .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
 
-  // Construir tabla de movimientos con saldos actualizados
+  // Construir tabla de movimientos con saldos actualizados - LÓGICA CORRECTA
   const movements = tenantReceipts
     .sort((a, b) => {
-      const dateA = new Date(`${a.year}-${(a.month.padStart || String.prototype.padStart).call(a.month, 2, '0')}-01`);
-      const dateB = new Date(`${b.year}-${(b.month.padStart || String.prototype.padStart).call(b.month, 2, '0')}-01`);
+      // Crear fechas válidas para ordenamiento
+      const monthA = String(a.month).padStart(2, '0');
+      const monthB = String(b.month).padStart(2, '0');
+      const dateA = new Date(`${a.year}-${monthA}-01`);
+      const dateB = new Date(`${b.year}-${monthB}-01`);
       return dateA.getTime() - dateB.getTime();
     })
-    .map((receipt, index) => {
-      // Calcular saldo acumulado hasta este recibo
-      const upToThisReceipt = tenantReceipts
-        .slice(0, index + 1)
-        .filter(r => r?.status === 'pagado' || r?.status === 'confirmado')
-        .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+    .map((receipt, index, sortedArray) => {
+      const monthStr = String(receipt.month).padStart(2, '0');
+      const rentAmount = receipt.rent || 0;
+      const expensesAmount = receipt.expenses || 0;
+      const totalDue = rentAmount + expensesAmount;
+      
+      // Obtener el pago realizado
+      const paymentMade = (receipt.status === 'pagado' || receipt.status === 'confirmado') ? totalDue : 0;
 
-      const totalDebtUpToThis = tenantReceipts
-        .slice(0, index + 1)
-        .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+      // Calcular saldo anterior
+      let previousBalance = 0;
+      if (index > 0) {
+        const previousReceipt = sortedArray[index - 1];
+        const prevTotalDue = (previousReceipt.rent || 0) + (previousReceipt.expenses || 0);
+        const prevPaymentMade = (previousReceipt.status === 'pagado' || previousReceipt.status === 'confirmado') ? prevTotalDue : 0;
+        
+        // Recalcular todos los saldos anteriores hasta el índice anterior
+        let calculatedBalance = 0;
+        for (let i = 0; i < index; i++) {
+          const curr = sortedArray[i];
+          const currTotalDue = (curr.rent || 0) + (curr.expenses || 0);
+          const currPaymentMade = (curr.status === 'pagado' || curr.status === 'confirmado') ? currTotalDue : 0;
+          calculatedBalance = calculatedBalance + currTotalDue - currPaymentMade;
+        }
+        previousBalance = calculatedBalance;
+      }
 
-      const balanceUpdated = totalDebtUpToThis - upToThisReceipt;
+      // Saldo actualizado = saldo anterior + lo que debe - lo que pagó
+      const balanceUpdated = previousBalance + totalDue - paymentMade;
 
       return {
         ...receipt,
-        dueDate: receipt.dueDate || `${receipt.year}-${String(receipt.month).padStart(2, '0')}-01`,
-        payment: receipt.status === 'pagado' || receipt.status === 'confirmado' ? (receipt.rent || 0) + (receipt.expenses || 0) : 0,
-        balance: balanceUpdated
+        monthStr,
+        dueDate: receipt.dueDate || `${receipt.year}-${monthStr}-10`, // Asumiendo pago el 10 de cada mes
+        rentAmount,
+        expensesAmount,
+        totalDue,
+        paymentMade,
+        previousBalance,
+        balanceUpdated
       };
     });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-8 w-full max-w-5xl mx-4 max-h-[95vh] overflow-y-auto">
+      <div className="bg-white rounded-xl p-8 w-full max-w-6xl mx-4 max-h-[95vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -176,47 +201,46 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
             {tenantReceipts.length > 0 ? (
               <div className="bg-white rounded-lg overflow-hidden border border-gray-300">
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full text-sm">
                     <thead className="bg-gray-200 border-b border-gray-300">
                       <tr>
-                        <th className="text-left py-3 px-4 font-bold text-gray-700">Fecha de Pago</th>
-                        <th className="text-left py-3 px-4 font-bold text-gray-700">Mes</th>
-                        <th className="text-right py-3 px-4 font-bold text-gray-700">Alquiler</th>
-                        <th className="text-right py-3 px-4 font-bold text-gray-700">Expensas</th>
-                        <th className="text-right py-3 px-4 font-bold text-gray-700">Total Adeudado</th>
-                        <th className="text-right py-3 px-4 font-bold text-gray-700">Pago Realizado</th>
-                        <th className="text-right py-3 px-4 font-bold text-gray-700">Saldo Actualizado</th>
-                        <th className="text-center py-3 px-4 font-bold text-gray-700">Estado</th>
+                        <th className="text-left py-3 px-3 font-bold text-gray-700">Fecha de Pago</th>
+                        <th className="text-left py-3 px-3 font-bold text-gray-700">Mes</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Alquiler</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Expensas</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Total Adeudado</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Anterior</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Pago Realizado</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Actualizado</th>
+                        <th className="text-center py-3 px-3 font-bold text-gray-700">Estado</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {movements.map((movement, idx) => {
-                        const totalDue = (movement.rent || 0) + (movement.expenses || 0);
-                        return (
-                          <tr key={idx} className={`hover:bg-gray-50 ${movement.balance > 0 ? 'bg-red-50' : ''}`}>
-                            <td className="py-3 px-4 font-medium text-gray-900">{movement.dueDate}</td>
-                            <td className="py-3 px-4 text-gray-900">{movement.month} {movement.year}</td>
-                            <td className="py-3 px-4 text-right text-gray-900">${movement.rent?.toLocaleString('es-AR') || '0'}</td>
-                            <td className="py-3 px-4 text-right text-gray-900">${movement.expenses?.toLocaleString('es-AR') || '0'}</td>
-                            <td className="py-3 px-4 text-right font-semibold text-gray-900">${totalDue.toLocaleString('es-AR')}</td>
-                            <td className={`py-3 px-4 text-right font-bold ${movement.payment > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                              ${movement.payment.toLocaleString('es-AR')}
-                            </td>
-                            <td className={`py-3 px-4 text-right font-bold ${movement.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              ${movement.balance.toLocaleString('es-AR')}
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${
-                                movement.status === 'pagado' || movement.status === 'confirmado' 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {movement.status === 'pagado' || movement.status === 'confirmado' ? '✓ Pagado' : '⏳ Pendiente'}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {movements.map((movement, idx) => (
+                        <tr key={idx} className={`hover:bg-gray-50 ${movement.balanceUpdated > 0 ? 'bg-red-50' : ''}`}>
+                          <td className="py-3 px-3 font-medium text-gray-900">{movement.dueDate}</td>
+                          <td className="py-3 px-3 text-gray-900">{movement.month} {movement.year}</td>
+                          <td className="py-3 px-3 text-right text-gray-900">${movement.rentAmount.toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-3 text-right text-gray-900">${movement.expensesAmount.toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-3 text-right font-semibold text-gray-900">${movement.totalDue.toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-3 text-right font-semibold text-gray-600">${movement.previousBalance.toLocaleString('es-AR')}</td>
+                          <td className={`py-3 px-3 text-right font-bold ${movement.paymentMade > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                            ${movement.paymentMade.toLocaleString('es-AR')}
+                          </td>
+                          <td className={`py-3 px-3 text-right font-bold ${movement.balanceUpdated > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            ${movement.balanceUpdated.toLocaleString('es-AR')}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${
+                              movement.status === 'pagado' || movement.status === 'confirmado' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {movement.status === 'pagado' || movement.status === 'confirmado' ? '✓ Pagado' : '⏳ Pendiente'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
