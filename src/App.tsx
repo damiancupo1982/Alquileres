@@ -7,7 +7,11 @@ import ReceiptsManager from './components/ReceiptsManager';
 import PaymentsHistory from './components/PaymentsHistory';
 import CashRegister from './components/CashRegister';
 import DataPortability from './components/DataPortability';
-
+React.useEffect(() => {
+  console.log('Properties:', properties);
+  console.log('Tenants:', tenants);
+  console.log('Receipts:', receipts);
+}, [properties, tenants, receipts]);
 type TabType = 'dashboard' | 'properties' | 'tenants' | 'receipts' | 'history' | 'cash';
 
 // Interfaces globales
