@@ -364,7 +364,7 @@ const CashRegister: React.FC<CashRegisterProps> = ({ cashMovements, setCashMovem
         </div>
       )}
 
-      {/* Movements Table */}
+      {/* Movements Table - ORDENADO DESC (MÁS RECIENTE PRIMERO) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
@@ -398,7 +398,7 @@ const CashRegister: React.FC<CashRegisterProps> = ({ cashMovements, setCashMovem
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredMovements.map((movement) => (
+              {[...filteredMovements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((movement) => (
                 <tr key={movement.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -517,38 +517,4 @@ const CashRegister: React.FC<CashRegisterProps> = ({ cashMovements, setCashMovem
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
                 <input
                   type="text"
-                  value={deliveryDescription}
-                  onChange={(e) => setDeliveryDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={`Entrega ${deliveryType === 'propietario' ? 'al propietario' : deliveryType === 'comision' ? 'de comisión' : 'de gasto'}`}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-6">
-              <button
-                onClick={() => {
-                  setShowDeliveryModal(false);
-                  setDeliveryAmount('');
-                  setDeliveryDescription('');
-                }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelivery}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                disabled={!deliveryAmount || parseFloat(deliveryAmount) <= 0}
-              >
-                Confirmar Entrega
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default CashRegister;
+                  value
