@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, User, Phone, Mail, Calendar, Edit, Trash2, Eye } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Plus, User, Phone, Mail, Calendar, Edit, Trash2, Eye, Filter, Download, Eye as EyeIcon } from 'lucide-react';
 import { Tenant, Property } from '../App';
 import TenantDetailModal from './TenantDetailModal';
 
@@ -16,6 +16,9 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [filterBuilding, setFilterBuilding] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showPreview, setShowPreview] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -39,6 +42,66 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
     
     return totalOwed;
+  };
+
+  // Obtener lista única de edificios
+  const buildings = useMemo(() => {
+    return [...new Set(tenants.map(t => {
+      const prop = properties.find(p => p.id === t.propertyId);
+      return prop?.building || 'Sin asignar';
+    }))].sort();
+  }, [tenants, properties]);
+
+  // Filtrar inquilinos
+  const filteredTenants = useMemo(() => {
+    return tenants.filter(tenant => {
+      const prop = properties.find(p => p.id === tenant.propertyId);
+      const building = prop?.building || 'Sin asignar';
+      const balance = calculateTenantBalance(tenant.name);
+      const tenantStatus = balance > 0 ? 'deudor' : 'pagado';
+
+      const buildingMatch = filterBuilding === 'all' || building === filterBuilding;
+      const statusMatch = filterStatus === 'all' || tenantStatus === filterStatus;
+
+      return buildingMatch && statusMatch;
+    });
+  }, [tenants, filterBuilding, filterStatus, properties, receipts]);
+
+  // Generar CSV
+  const generateCSV = () => {
+    const headers = ['Inquilino', 'Email', 'Teléfono', 'Propiedad', 'Edificio', 'Contrato Inicio', 'Contrato Fin', 'Saldo', 'Estado', 'Depósito'];
+    const rows = filteredTenants.map(tenant => {
+      const prop = properties.find(p => p.id === tenant.propertyId);
+      const balance = calculateTenantBalance(tenant.name);
+      const status = balance > 0 ? 'Deudor' : 'Pagado';
+      
+      return [
+        `"${tenant.name}"`,
+        `"${tenant.email}"`,
+        `"${tenant.phone}"`,
+        `"${prop?.name || 'Sin asignar'}"`,
+        `"${prop?.building || 'Sin asignar'}"`,
+        tenant.contractStart,
+        tenant.contractEnd,
+        balance,
+        status,
+        tenant.deposit
+      ];
+    });
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inquilinos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -74,7 +137,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       }
     } else {
       setTenants([...tenants, newTenant]);
-      // Asignar propiedad al nuevo inquilino
       if (newTenant.propertyId) {
         updatePropertyTenant(newTenant.propertyId, newTenant.name);
       }
@@ -109,7 +171,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     if (confirm('¿Está seguro de eliminar este inquilino?')) {
       const tenant = tenants.find(t => t.id === id);
       if (tenant?.propertyId) {
-        // Liberar la propiedad
         updatePropertyTenant(null, null, tenant.propertyId);
       }
       setTenants(tenants.filter(t => t.id !== id));
@@ -130,13 +191,15 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     }
   };
 
-  // Obtener propiedades disponibles (no ocupadas) más la propiedad actual del inquilino
   const getAvailableProperties = () => {
     return properties.filter(property => 
       property.status === 'disponible' || 
       (editingTenant && property.id === editingTenant.propertyId)
     );
   };
+
+  const debtorCount = filteredTenants.filter(t => calculateTenantBalance(t.name) > 0).length;
+  const totalDebt = filteredTenants.reduce((sum, t) => sum + calculateTenantBalance(t.name), 0);
 
   return (
     <div className="space-y-6">
@@ -157,6 +220,73 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
           <Plus className="h-5 w-5" />
           <span>Agregar Inquilino</span>
         </button>
+      </div>
+
+      {/* Filtros y estadísticas */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Filtros */}
+          <div className="flex items-center space-x-4">
+            <Filter className="h-5 w-5 text-gray-400" />
+            
+            {/* Filtro Edificio */}
+            <select
+              value={filterBuilding}
+              onChange={(e) => setFilterBuilding(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todos los Edificios</option>
+              {buildings.map(building => (
+                <option key={building} value={building}>{building}</option>
+              ))}
+            </select>
+
+            {/* Filtro Estado */}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Todos los Estados</option>
+              <option value="pagado">✓ Pagados</option>
+              <option value="deudor">⚠️ Deudores</option>
+            </select>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center space-x-1 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
+            >
+              <EyeIcon className="h-4 w-4" />
+              <span>Previsualizar</span>
+            </button>
+            <button
+              onClick={generateCSV}
+              className="flex items-center space-x-1 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
+            >
+              <Download className="h-4 w-4" />
+              <span>Descargar CSV</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Estadísticas */}
+        <div className="mt-4 grid grid-cols-3 gap-4">
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-xs text-gray-600">Total Inquilinos</p>
+            <p className="text-2xl font-bold text-gray-900">{filteredTenants.length}</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3">
+            <p className="text-xs text-red-600">Deudores</p>
+            <p className="text-2xl font-bold text-red-600">{debtorCount}</p>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-3">
+            <p className="text-xs text-blue-600">Deuda Total</p>
+            <p className="text-2xl font-bold text-blue-600">${totalDebt.toLocaleString('es-AR')}</p>
+          </div>
+        </div>
       </div>
 
       {/* Tenants Table */}
@@ -189,8 +319,9 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tenants.map((tenant) => {
+              {filteredTenants.map((tenant) => {
                 const balance = calculateTenantBalance(tenant.name);
+                const prop = properties.find(p => p.id === tenant.propertyId);
                 return (
                   <tr key={tenant.id} className={`hover:bg-gray-50 ${balance > 0 ? 'bg-red-50' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -224,7 +355,8 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{tenant.property}</div>
+                      <div className="text-sm font-medium text-gray-900">{prop?.name || 'Sin asignar'}</div>
+                      <div className="text-xs text-gray-500">{prop?.building || 'Sin edificio'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
@@ -452,6 +584,81 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
             setSelectedTenant(null);
           }}
         />
+      )}
+
+      {/* Modal de previsualización CSV */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Previsualización de Datos</h3>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Inquilino</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Email</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Teléfono</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Propiedad</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Edificio</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Inicio</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Fin</th>
+                    <th className="border border-gray-300 px-3 py-2 text-right">Saldo</th>
+                    <th className="border border-gray-300 px-3 py-2 text-left">Estado</th>
+                    <th className="border border-gray-300 px-3 py-2 text-right">Depósito</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTenants.map((tenant) => {
+                    const prop = properties.find(p => p.id === tenant.propertyId);
+                    const balance = calculateTenantBalance(tenant.name);
+                    const status = balance > 0 ? 'Deudor' : 'Pagado';
+
+                    return (
+                      <tr key={tenant.id} className={balance > 0 ? 'bg-red-50' : ''}>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.name}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.email}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.phone}</td>
+                        <td className="border border-gray-300 px-3 py-2">{prop?.name || 'Sin asignar'}</td>
+                        <td className="border border-gray-300 px-3 py-2">{prop?.building || 'Sin edificio'}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.contractStart}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.contractEnd}</td>
+                        <td className={`border border-gray-300 px-3 py-2 text-right font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${balance.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2">{status}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">${tenant.deposit.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex justify-end space-x-2">
+              <button
+                onClick={() => setShowPreview(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={generateCSV}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Descargar CSV
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
