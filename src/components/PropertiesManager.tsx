@@ -11,7 +11,6 @@ import {
   Home,
   Users as UsersIcon,
 } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { Property } from '../App';
 
 interface PropertiesManagerProps {
@@ -19,7 +18,6 @@ interface PropertiesManagerProps {
   setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
 }
 
-// ===== Helpers a prueba de datos incompletos =====
 const safeText = (v: unknown, fallback = '') => {
   const s = String(v ?? '').trim();
   return s || fallback;
@@ -74,7 +72,6 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
       type: formData.type,
       building: safeText(formData.building),
       address: safeText(formData.address),
-      // si vienen vacíos, quedan en 0 (no NaN)
       rent: toNumberSafe(formData.rent),
       expenses: toNumberSafe(formData.expenses),
       nextUpdateDate: formData.nextUpdateDate || '',
@@ -155,17 +152,6 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     return labels[String(type ?? 'otro')] ?? 'Otro';
   };
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const items = Array.from(properties);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    setProperties(items);
-  };
-
-  // Filtrar propiedades según el estado seleccionado (blindado)
   const filteredProperties = useMemo(() => {
     return (properties ?? []).filter((property: any) => {
       if (filterStatus === 'all') return true;
@@ -173,7 +159,6 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     });
   }, [properties, filterStatus]);
 
-  // Agrupar propiedades por edificio (blindado)
   const propertiesByBuilding = useMemo(() => {
     return (properties ?? []).reduce((acc, property: any) => {
       const buildingKey = safeText(property?.building, 'Sin edificio');
@@ -290,121 +275,103 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
         </div>
       </div>
 
-      {/* Properties Display */}
+      {/* Properties Display - Grid View */}
       {viewMode === 'grid' ? (
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="properties" direction="horizontal">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              >
-                {filteredProperties.map((property: any, index) => (
-                  <Draggable key={String(property?.id)} draggableId={String(property?.id)} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className={`bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 ${
-                          snapshot.isDragging ? 'shadow-lg scale-105 rotate-2' : ''
-                        }`}
-                      >
-                        <div className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{safeText(property?.name, 'Sin nombre')}</h3>
-                              <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
-                              <p className="text-sm text-blue-600 font-medium">{safeText(property?.building, 'Sin edificio')}</p>
-                            </div>
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                (property?.status ?? 'disponible') as Property['status']
-                              )}`}
-                            >
-                              {safeTitle(property?.status, 'Disponible')}
-                            </span>
-                          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredProperties.map((property: any) => (
+            <div
+              key={String(property?.id)}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200"
+            >
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">{safeText(property?.name, 'Sin nombre')}</h3>
+                    <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
+                    <p className="text-sm text-blue-600 font-medium">{safeText(property?.building, 'Sin edificio')}</p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                      (property?.status ?? 'disponible') as Property['status']
+                    )}`}
+                  >
+                    {safeTitle(property?.status, 'Disponible')}
+                  </span>
+                </div>
 
-                          <div className="space-y-3">
-                            <div className="flex items-center text-gray-600">
-                              <MapPin className="h-4 w-4 mr-2" />
-                              <span className="text-sm">{safeText(property?.address, '-')}</span>
-                            </div>
+                <div className="space-y-3">
+                  <div className="flex items-center text-gray-600">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    <span className="text-sm">{safeText(property?.address, '-')}</span>
+                  </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-xs text-gray-500">Alquiler</p>
-                                <p className="font-semibold text-gray-900">${safeMoney(property?.rent)}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Expensas</p>
-                                <p className="font-semibold text-gray-900">${safeMoney(property?.expenses)}</p>
-                              </div>
-                            </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Alquiler</p>
+                      <p className="font-semibold text-gray-900">${safeMoney(property?.rent)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Expensas</p>
+                      <p className="font-semibold text-gray-900">${safeMoney(property?.expenses)}</p>
+                    </div>
+                  </div>
 
-                            {property?.tenant && (
-                              <div>
-                                <p className="text-xs text-gray-500">Inquilino</p>
-                                <p className="font-medium text-gray-900">{property.tenant}</p>
-                              </div>
-                            )}
+                  {property?.tenant && (
+                    <div>
+                      <p className="text-xs text-gray-500">Inquilino</p>
+                      <p className="font-medium text-gray-900">{property.tenant}</p>
+                    </div>
+                  )}
 
-                            {property?.contractStart && property?.contractEnd && (
-                              <div className="flex items-center text-gray-600">
-                                <Calendar className="h-4 w-4 mr-2" />
-                                <span className="text-xs">
-                                  {property.contractStart} - {property.contractEnd}
-                                </span>
-                              </div>
-                            )}
+                  {property?.contractStart && property?.contractEnd && (
+                    <div className="flex items-center text-gray-600">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <span className="text-xs">
+                        {property.contractStart} - {property.contractEnd}
+                      </span>
+                    </div>
+                  )}
 
-                            {property?.notes && (
-                              <div>
-                                <p className="text-xs text-gray-500">Notas</p>
-                                <p className="text-sm text-gray-700 truncate">{property.notes}</p>
-                              </div>
-                            )}
+                  {property?.notes && (
+                    <div>
+                      <p className="text-xs text-gray-500">Notas</p>
+                      <p className="text-sm text-gray-700 truncate">{property.notes}</p>
+                    </div>
+                  )}
 
-                            {property?.nextUpdateDate && (
-                              <div className="flex items-center text-gray-600">
-                                <Calendar className="h-4 w-4 mr-2" />
-                                <span className="text-xs">Próxima actualización: {property.nextUpdateDate}</span>
-                              </div>
-                            )}
+                  {property?.nextUpdateDate && (
+                    <div className="flex items-center text-gray-600">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <span className="text-xs">Próxima actualización: {property.nextUpdateDate}</span>
+                    </div>
+                  )}
 
-                            <div className="text-xs text-gray-500">Actualizado: {safeText(property?.lastUpdated, '-')}</div>
-                          </div>
+                  <div className="text-xs text-gray-500">Actualizado: {safeText(property?.lastUpdated, '-')}</div>
+                </div>
 
-                          <div className="flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-100">
-                            <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(property)}
-                              className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(property.id)}
-                              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
+                <div className="flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-100">
+                  <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleEdit(property)}
+                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(property.id)}
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* Building View */
         <div className="space-y-6">
           {Object.entries(propertiesByBuilding).map(([building, buildingProperties]) => (
             <div key={building} className="bg-white rounded-xl shadow-sm border border-gray-200">
