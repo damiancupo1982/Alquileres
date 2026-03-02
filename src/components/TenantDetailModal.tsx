@@ -54,7 +54,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
       monthLabel: `${receipt.month} ${receipt.year}`,
       rent: rentAmount,
       expenses: expensesAmount,
-      must: totalDue,
+      total: totalDue,
       previousBalance: runningBalance,
       payment: 0,
       status: receipt.status,
@@ -70,7 +70,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
         monthLabel: 'PAGO',
         rent: 0,
         expenses: 0,
-        must: totalDue,
+        total: 0, // No mostrar en renglón de pago
         previousBalance: runningBalance + totalDue,
         payment: paymentMade,
         status: receipt.status,
@@ -215,7 +215,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
                         <th className="text-left py-3 px-3 font-bold text-gray-700">Mes</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Alquiler</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Expensas</th>
-                        <th className="text-right py-3 px-3 font-bold text-gray-700">DEBE</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">Total</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Anterior</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Pago Realizado</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Actualizado</th>
@@ -240,7 +240,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
                               {movement.type === 'due' ? `$ ${movement.expenses.toLocaleString('es-AR')}` : '-'}
                             </td>
                             <td className="py-3 px-3 text-right font-semibold text-gray-900">
-                              {movement.type === 'due' ? `$ ${movement.must.toLocaleString('es-AR')}` : `$ ${movement.must.toLocaleString('es-AR')}`}
+                              {movement.type === 'due' ? `$ ${movement.total.toLocaleString('es-AR')}` : '-'}
                             </td>
                             <td className="py-3 px-3 text-right text-gray-600">
                               $ {movement.previousBalance.toLocaleString('es-AR')}
