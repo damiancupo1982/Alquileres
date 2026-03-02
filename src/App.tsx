@@ -7,12 +7,9 @@ import ReceiptsManager from './components/ReceiptsManager';
 import PaymentsHistory from './components/PaymentsHistory';
 import CashRegister from './components/CashRegister';
 import DataPortability from './components/DataPortability';
-React.useEffect(() => {
-  console.log('Properties:', properties);
-  console.log('Tenants:', tenants);
-  console.log('Receipts:', receipts);
-}, [properties, tenants, receipts]);
+
 type TabType = 'dashboard' | 'properties' | 'tenants' | 'receipts' | 'history' | 'cash';
+
 // Interfaces globales
 export interface Tenant {
   id: number;
@@ -20,7 +17,7 @@ export interface Tenant {
   email: string;
   phone: string;
   propertyId: number | null;
-  property: string; // Mantenemos para compatibilidad
+  property: string;
   contractStart: string;
   contractEnd: string;
   deposit: number;
@@ -110,61 +107,61 @@ function App() {
 
   const [properties, setProperties] = useState<Property[]>(() =>
     loadFromLocalStorage('properties', [
-    {
-      id: 1,
-      name: 'Departamento A-101',
-      type: 'departamento',
-      building: 'Ramos Mejia',
-      address: 'Av. Corrientes 1234, CABA',
-      rent: 50000,
-      expenses: 5000,
-      nextUpdateDate: '2025-03-01',
-      tenant: 'Juan Pérez',
-      status: 'ocupado',
-      contractStart: '2024-01-15',
-      contractEnd: '2025-01-15',
-      lastUpdated: '2025-01-12',
-      notes: 'Departamento con balcón'
-    },
-    {
-      id: 2,
-      name: 'Oficina B-201',
-      type: 'oficina',
-      building: 'Torre Empresarial',
-      address: 'Av. Libertador 5678, CABA',
-      rent: 28000,
-      expenses: 3500,
-      tenant: null,
-      status: 'disponible',
-      contractStart: '',
-      contractEnd: '',
-      lastUpdated: '2025-01-12',
-      notes: 'Oficina con vista panorámica'
-    }
-  ])
+      {
+        id: 1,
+        name: 'Departamento A-101',
+        type: 'departamento',
+        building: 'Ramos Mejia',
+        address: 'Av. Corrientes 1234, CABA',
+        rent: 50000,
+        expenses: 5000,
+        nextUpdateDate: '2025-03-01',
+        tenant: 'Juan Pérez',
+        status: 'ocupado',
+        contractStart: '2024-01-15',
+        contractEnd: '2025-01-15',
+        lastUpdated: '2025-01-12',
+        notes: 'Departamento con balcón'
+      },
+      {
+        id: 2,
+        name: 'Oficina B-201',
+        type: 'oficina',
+        building: 'Torre Empresarial',
+        address: 'Av. Libertador 5678, CABA',
+        rent: 28000,
+        expenses: 3500,
+        tenant: null,
+        status: 'disponible',
+        contractStart: '',
+        contractEnd: '',
+        lastUpdated: '2025-01-12',
+        notes: 'Oficina con vista panorámica'
+      }
+    ])
   );
 
   const [tenants, setTenants] = useState<Tenant[]>(() =>
     loadFromLocalStorage('tenants', [
-    {
-      id: 1,
-      name: 'Juan Pérez',
-      email: 'juan.perez@email.com',
-      phone: '+54 11 1234-5678',
-      propertyId: 1,
-      property: 'Departamento A-101',
-      contractStart: '2024-01-15',
-      contractEnd: '2025-01-15',
-      deposit: 50000,
-      guarantor: {
-        name: 'María Pérez',
-        email: 'maria.perez@email.com',
-        phone: '+54 11 1234-5679'
-      },
-      balance: 0,
-      status: 'activo'
-    }
-  ])
+      {
+        id: 1,
+        name: 'Juan Pérez',
+        email: 'juan.perez@email.com',
+        phone: '+54 11 1234-5678',
+        propertyId: 1,
+        property: 'Departamento A-101',
+        contractStart: '2024-01-15',
+        contractEnd: '2025-01-15',
+        deposit: 50000,
+        guarantor: {
+          name: 'María Pérez',
+          email: 'maria.perez@email.com',
+          phone: '+54 11 1234-5679'
+        },
+        balance: 0,
+        status: 'activo'
+      }
+    ])
   );
 
   const [receipts, setReceipts] = useState<Receipt[]>(() =>
@@ -174,6 +171,13 @@ function App() {
   const [cashMovements, setCashMovements] = useState<CashMovement[]>(() =>
     loadFromLocalStorage('cashMovements', [])
   );
+
+  // Debug: Log cuando cambian los datos
+  useEffect(() => {
+    console.log('Properties:', properties);
+    console.log('Tenants:', tenants);
+    console.log('Receipts:', receipts);
+  }, [properties, tenants, receipts]);
 
   // Guardar en localStorage cuando cambia el estado
   useEffect(() => {
@@ -364,7 +368,7 @@ function App() {
       </main>
 
       {/* Data Portability */}
-{/* <DataPortability /> */}
+      {/* <DataPortability /> */}
     </div>
   );
 }
