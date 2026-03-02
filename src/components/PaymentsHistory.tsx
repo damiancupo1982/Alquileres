@@ -449,7 +449,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
         </div>
       </div>
 
-      {/* Payments Table */}
+      {/* Payments Table - ORDENADO DESC (MÁS RECIENTE PRIMERO) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -482,7 +482,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredPayments.map((payment) => (
+              {[...filteredPayments].sort((a, b) => b.id - a.id).map((payment) => (
                 <tr key={payment.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
