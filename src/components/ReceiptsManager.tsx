@@ -95,15 +95,15 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
   const handleTenantChange = (tenantName: string) => {
     const selectedTenant = tenants.find((t) => t.name === tenantName);
     
-    // IMPORTANTE: Buscar por el nombre de propiedad del inquilino, no por propertyId
-    const selectedProperty = properties.find((p) => p.name === selectedTenant?.property);
+    // USAR propertyId del inquilino para encontrar la propiedad correcta
+    const selectedProperty = properties.find((p) => p.id === selectedTenant?.propertyId);
 
     // Mes actual
     const now = new Date();
     const currentMonth = months[now.getMonth()];
     const currentYear = now.getFullYear();
 
-    // Fecha de vencimiento: día 10 del mes seleccionado
+    // Fecha de vencimiento: día 10
     const dueDate = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
 
     // Balance actual del inquilino
@@ -112,7 +112,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     setFormData((prev) => ({
       ...prev,
       tenant: tenantName,
-      property: selectedTenant?.property || '',
+      property: selectedProperty?.name || '',
       month: currentMonth,
       year: currentYear,
       rent: selectedProperty?.rent !== undefined ? String(selectedProperty.rent) : '',
@@ -624,7 +624,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
         </button>
       </div>
 
-      {/* Receipts Table */}
+      {/* Receipts Table - ORDENADO DESC (MÁS RECIENTE PRIMERO) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -1213,7 +1213,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
             {/* Receipt Preview */}
             <div className="border border-gray-300 rounded-lg p-6 mb-4 bg-gray-50">
-              {selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion' && (
+              {(selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion') && (
                 <div className="text-center text-red-600 font-bold mb-4 p-2 bg-red-50 rounded">
                   *** RECIBO BORRADOR - NO VÁLIDO PARA PAGO ***
                 </div>
@@ -1336,7 +1336,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
               <div className="text-center text-sm text-gray-600 border-t border-gray-300 pt-4">
                 <p>Este recibo debe ser abonado antes del {selectedReceipt.dueDate || '-'}</p>
                 <p>Gracias por su puntualidad en el pago</p>
-                {selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion' && (
+                {(selectedReceipt.status === 'borrador' || selectedReceipt.status === 'pendiente_confirmacion') && (
                   <p className="text-red-600 font-bold mt-2">*** ESTE ES UN RECIBO BORRADOR ***</p>
                 )}
               </div>
