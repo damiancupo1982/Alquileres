@@ -56,6 +56,21 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
   const [showUpdateAlert, setShowUpdateAlert] = useState(false);
   const [updateAlertMessage, setUpdateAlertMessage] = useState('');
 
+  const months = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+
   const [formData, setFormData] = useState({
     tenant: '',
     property: '',
@@ -76,20 +91,49 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     totalPaying: 0,
   });
 
-  const months = [
-    'Enero',
-    'Febrero',
-    'Marzo',
-    'Abril',
-    'Mayo',
-    'Junio',
-    'Julio',
-    'Agosto',
-    'Septiembre',
-    'Octubre',
-    'Noviembre',
-    'Diciembre',
-  ];
+  // AUTO-RELLENAR cuando se selecciona inquilino
+  const handleTenantChange = (tenantName: string) => {
+    const selectedTenant = tenants.find((t) => t.name === tenantName);
+    const selectedProperty = properties.find((p) => p.name === selectedTenant?.property);
+
+    // Mes actual
+    const now = new Date();
+    const currentMonth = months[now.getMonth()];
+    const currentYear = now.getFullYear();
+
+    // Fecha de vencimiento: día 10 del mes seleccionado
+    const dueDate = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
+
+    // Balance actual del inquilino
+    const tenantBalance = selectedTenant?.balance ?? 0;
+
+    setFormData((prev) => ({
+      ...prev,
+      tenant: tenantName,
+      property: selectedTenant?.property || '',
+      month: currentMonth,
+      year: currentYear,
+      rent: selectedProperty?.rent !== undefined ? String(selectedProperty?.rent) : '',
+      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty?.expenses) : '',
+      previousBalance: String(tenantBalance),
+      dueDate,
+    }));
+
+    maybeShowUpdateAlert(selectedProperty);
+  };
+
+  const handlePropertyChange = (propertyName: string) => {
+    const selectedProperty = properties.find((p) => p.name === propertyName);
+
+    setFormData((prev) => ({
+      ...prev,
+      property: propertyName,
+      rent: selectedProperty?.rent !== undefined ? String(selectedProperty?.rent) : '',
+      expenses: selectedProperty?.expenses !== undefined ? String(selectedProperty?.expenses) : '',
+    }));
+
+    maybeShowUpdateAlert(selectedProperty);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +152,9 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
     const createdDate =
       editingReceipt?.createdDate || new Date().toISOString().split('T')[0];
+
+    // Determinar status: si se está creando ahora es "pendiente_confirmacion", si se edita mantiene su status
+    const status = editingReceipt?.status || 'pendiente_confirmacion';
 
     const newReceipt: Receipt = {
       id: editingReceipt ? editingReceipt.id : Date.now(),
@@ -133,7 +180,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
       remainingBalance: total - (editingReceipt?.paidAmount || 0),
       currency: formData.currency,
       paymentMethod: editingReceipt?.paymentMethod || 'efectivo',
-      status: editingReceipt?.status || 'borrador',
+      status: status,
       dueDate: formData.dueDate || '',
       createdDate,
     };
@@ -232,6 +279,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
     setReceipts((prev) => prev.map((r) => (r.id === payingReceipt.id ? updatedReceipt : r)));
 
+    // Registrar movimientos en caja
     if (efectivoAmount > 0) {
       addCashMovement({
         type: 'income',
@@ -271,6 +319,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
       });
     }
 
+    // Actualizar balance del inquilino
     const tenant = tenants.find((t) => t.name === payingReceipt.tenant);
     if (tenant) {
       const newBalance = Math.max(0, (tenant.balance || 0) - totalPaying);
@@ -481,9 +530,12 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
         return 'bg-green-100 text-green-800';
       case 'pendiente':
         return 'bg-yellow-100 text-yellow-800';
+      case 'confirmado':
+        return 'bg-green-100 text-green-800';
       case 'vencido':
         return 'bg-red-100 text-red-800';
       case 'borrador':
+      case 'pendiente_confirmacion':
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -493,17 +545,21 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     switch (status) {
       case 'pagado':
         return 'Pagado';
+      case 'confirmado':
+        return 'Confirmado';
       case 'pendiente':
         return 'Pendiente';
       case 'vencido':
         return 'Vencido';
       case 'borrador':
-      default:
         return 'Borrador';
+      case 'pendiente_confirmacion':
+        return 'Pendiente Confirmación';
+      default:
+        return 'Desconocido';
     }
   };
 
-  // Calcular total de pagos en tiempo real
   React.useEffect(() => {
     const efectivo = parseFloat(paymentData.efectivoARS) || 0;
     const transferencia = parseFloat(paymentData.transferenciaARS) || 0;
@@ -514,7 +570,6 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
     }
   }, [paymentData.efectivoARS, paymentData.transferenciaARS, paymentData.dolares]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Helper para alerta de actualización de valores
   const maybeShowUpdateAlert = (p?: Property) => {
     if (!p?.nextUpdateDate) return;
     const updateDate =
@@ -671,7 +726,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
                       >
                         <Printer className="h-4 w-4" />
                       </button>
-                      {(receipt.status === 'borrador' || receipt.status === 'pendiente') && (
+                      {(receipt.status === 'borrador' || receipt.status === 'pendiente_confirmacion' || receipt.status === 'pendiente') && (
                         <button
                           onClick={() => handleEdit(receipt)}
                           className="text-gray-400 hover:text-blue-600 transition-colors"
@@ -726,34 +781,11 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Inquilino
+                    Inquilino *
                   </label>
                   <select
                     value={formData.tenant}
-                    onChange={(e) => {
-                      const selectedTenant = tenants.find(
-                        (t) => t.name === e.target.value
-                      );
-                      const selectedProperty = properties.find(
-                        (p) => p.name === selectedTenant?.property
-                      );
-                      setFormData((prev) => ({
-                        ...prev,
-                        tenant: e.target.value,
-                        property: selectedTenant?.property || '',
-                        rent:
-                          selectedProperty?.rent !== undefined
-                            ? String(selectedProperty.rent)
-                            : '',
-                        expenses:
-                          selectedProperty?.expenses !== undefined
-                            ? String(selectedProperty.expenses)
-                            : '',
-                        previousBalance: (selectedTenant?.balance ?? 0).toString(),
-                      }));
-                      // Alerta si corresponde
-                      maybeShowUpdateAlert(selectedProperty);
-                    }}
+                    onChange={(e) => handleTenantChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   >
@@ -768,29 +800,11 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Propiedad
+                    Propiedad *
                   </label>
                   <select
                     value={formData.property}
-                    onChange={(e) => {
-                      const selectedProperty = properties.find(
-                        (p) => p.name === e.target.value
-                      );
-                      setFormData((prev) => ({
-                        ...prev,
-                        property: e.target.value,
-                        rent:
-                          selectedProperty?.rent !== undefined
-                            ? String(selectedProperty.rent)
-                            : '',
-                        expenses:
-                          selectedProperty?.expenses !== undefined
-                            ? String(selectedProperty.expenses)
-                            : '',
-                      }));
-                      // Alerta si corresponde
-                      maybeShowUpdateAlert(selectedProperty);
-                    }}
+                    onChange={(e) => handlePropertyChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   >
@@ -805,7 +819,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Mes
+                    Mes *
                   </label>
                   <select
                     value={formData.month}
@@ -826,7 +840,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Año
+                    Año *
                   </label>
                   <input
                     type="number"
@@ -846,7 +860,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Alquiler ($)
+                    Alquiler ($) *
                   </label>
                   <input
                     type="number"
@@ -861,7 +875,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Expensas ($)
+                    Expensas ($) *
                   </label>
                   <input
                     type="number"
@@ -888,6 +902,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
                       }))
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled
                   />
                 </div>
 
@@ -912,7 +927,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha de vencimiento
+                    Fecha de vencimiento *
                   </label>
                   <input
                     type="date"
@@ -1103,7 +1118,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({
               </button>
               <button
                 onClick={handlePayment}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                 disabled={
                   paymentData.totalPaying <= 0 ||
                   paymentData.totalPaying > safeNumber(payingReceipt.remainingBalance)
