@@ -46,19 +46,15 @@ const getMonthName = (monthNum: number): string => {
   return months[monthNum] || '';
 };
 
-// Colores por edificio
-const buildingColors: Record<string, { bg: string; text: string; light: string }> = {
-  'Ramos Mejia': { bg: 'bg-pink-50', text: 'text-pink-700', light: 'bg-pink-100' },
-  'Limay': { bg: 'bg-blue-50', text: 'text-blue-700', light: 'bg-blue-100' },
-  'Bolivar': { bg: 'bg-orange-50', text: 'text-orange-700', light: 'bg-orange-100' },
-  'Alvear': { bg: 'bg-purple-50', text: 'text-purple-700', light: 'bg-purple-100' },
-  'Faena': { bg: 'bg-indigo-50', text: 'text-indigo-700', light: 'bg-indigo-100' },
-  'Gaboto': { bg: 'bg-green-50', text: 'text-green-700', light: 'bg-green-100' },
-  'Gazcon': { bg: 'bg-yellow-50', text: 'text-yellow-700', light: 'bg-yellow-100' },
-};
-
-const getBuildingColor = (building: string) => {
-  return buildingColors[building] || { bg: 'bg-gray-50', text: 'text-gray-700', light: 'bg-gray-100' };
+// Colores por edificio - MISMO ORDEN QUE TU IMAGEN
+const buildingColors: Record<string, string> = {
+  'Ramos Mejia': '#FFE0F0', // Rosa
+  'Limay': '#E0F0FF',        // Azul
+  'Bolivar': '#FFE8D0',      // Naranja
+  'Alvear': '#F0E0FF',       // Púrpura
+  'Faena': '#E0E8FF',        // Índigo
+  'Gaboto': '#E0FFE0',       // Verde
+  'Gazcon': '#FFFFE0',       // Amarillo
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, setActiveTab }) => {
@@ -67,19 +63,68 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
   const [selectedReportMonth, setSelectedReportMonth] = useState(new Date().getMonth());
   const [selectedReportYear, setSelectedReportYear] = useState(new Date().getFullYear());
 
-  // Deudores ordenados de mayor a menor
+  // DEBUG
+  useMemo(() => {
+    console.log('DEBUG Dashboard:', {
+      receiptsCount: receipts?.length,
+      tenantsCount: tenants?.length,
+      propertiesCount: properties?.length,
+      firstReceipt: receipts?.[0],
+      firstTenant: tenants?.[0],
+      firstProperty: properties?.[0],
+    });
+  }, [receipts, tenants, properties]);
+
+  // DEUDORES - filtrar inquilinos con balance > 0
   const debtorsList = useMemo(() => {
     return (tenants ?? [])
-      .filter((tenant) => toNumberSafe((tenant as any)?.balance) > 0)
-      .map((tenant) => ({
-        id: (tenant as any)?.id,
-        name: (tenant as any)?.name,
-        balance: toNumberSafe((tenant as any)?.balance),
+      .filter((tenant: any) => {
+        const balance = toNumberSafe(tenant?.balance);
+        console.log(`Tenant ${tenant?.name}: balance=${balance}`);
+        return balance > 0;
+      })
+      .map((tenant: any) => ({
+        id: tenant?.id,
+        name: tenant?.name,
+        balance: toNumberSafe(tenant?.balance),
       }))
       .sort((a, b) => b.balance - a.balance);
   }, [tenants]);
 
-  const totalDebt = useMemo(() => debtorsList.reduce((sum, d) => sum + d.balance, 0), [debtorsList]);
+  const totalDebt = useMemo(() => {
+    const total = debtorsList.reduce((sum, d) => sum + d.balance, 0);
+    console.log('Total Debt:', total);
+    return total;
+  }, [debtorsList]);
+
+  // INGRESOS DEL MES - filtrar por createdDate (cuándo se registró el pago)
+  const monthlyIncome = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    console.log(`Calculando ingresos para mes=${currentMonth}, año=${currentYear}`);
+
+    const income = (receipts ?? [])
+      .filter((receipt: any) => {
+        const createdDate = safeDate(receipt?.createdDate);
+        if (!createdDate) return false;
+        const isCurrentMonth = createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
+        const isPaid = receipt?.status === 'pagado' || receipt?.status === 'confirmado';
+        
+        console.log(`Receipt ${receipt?.receiptNumber}: createdDate=${receipt?.createdDate}, paidAmount=${receipt?.paidAmount}, status=${receipt?.status}, match=${isCurrentMonth && isPaid}`);
+        
+        return isCurrentMonth && isPaid;
+      })
+      .reduce((sum: number, receipt: any) => {
+        const paid = toNumberSafe(receipt?.paidAmount);
+        console.log(`  Adding ${paid} from ${receipt?.tenant}`);
+        return sum + paid;
+      }, 0);
+
+    console.log('Monthly Income Total:', income);
+    return income;
+  }, [receipts]);
 
   // Propiedades ocupadas
   const occupiedProperties = (properties ?? []).filter((p: any) => p?.status === 'ocupado').length;
@@ -88,24 +133,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
   // Inquilinos activos
   const activeTenants = (tenants ?? []).filter((t: any) => t?.status === 'activo').length;
   const occupancyRate = totalProperties > 0 ? ((activeTenants / totalProperties) * 100).toFixed(1) : '0';
-
-  // Ingresos del mes actual (CORREGIDO: usar receipt.total para teórico, paidAmount para real)
-  const monthlyIncome = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const currentMonthReceipts = (receipts ?? []).filter((receipt: any) => {
-      const receiptDate = safeDate(receipt?.dueDate || receipt?.createdDate);
-      if (!receiptDate) return false;
-      return receiptDate.getMonth() === currentMonth && receiptDate.getFullYear() === currentYear;
-    });
-
-    // Ingresos reales (pagados)
-    return currentMonthReceipts
-      .filter((r: any) => r?.status === 'pagado' || r?.status === 'confirmado')
-      .reduce((sum: number, receipt: any) => sum + toNumberSafe(receipt?.paidAmount), 0);
-  }, [receipts]);
 
   const stats = useMemo(
     () => [
@@ -162,7 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
       }));
   }, [receipts]);
 
-  // Generar reporte mensual
+  // Generar reporte mensual - RESPETANDO TU ESTRUCTURA EXACTA
   const generateMonthlyReport = () => {
     const reportMonth = selectedReportMonth;
     const reportYear = selectedReportYear;
@@ -175,7 +202,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
       return dueDate.getMonth() === reportMonth && dueDate.getFullYear() === reportYear;
     });
 
-    // Agrupar por edificio manteniendo orden
+    console.log(`Generando reporte para ${monthName} ${reportYear}. Recibos del mes: ${monthReceipts.length}`);
+
+    // Agrupar por edificio, manteniendo TODAS las propiedades en orden
     const sortedProperties = [...(properties ?? [])].sort((a: any, b: any) => {
       const buildingA = a?.building || 'Sin edificio';
       const buildingB = b?.building || 'Sin edificio';
@@ -192,40 +221,37 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
         buildingOrder.push(building);
       }
 
-      const propReceipts = monthReceipts.filter((r: any) => r?.property === prop?.name);
+      // Buscar el inquilino de esta propiedad
       const tenant = tenants?.find((t: any) => t?.propertyId === prop?.id);
+      
+      // Buscar recibos de este inquilino en el mes seleccionado
+      const propReceipts = monthReceipts.filter((r: any) => r?.tenant === tenant?.name);
 
-      if (propReceipts.length > 0 || tenant) {
-        const receipt = propReceipts[0];
-        reportData[building].push({
-          propertyName: prop?.name,
-          tenantName: tenant?.name || '-',
-          paidAmount: receipt?.paidAmount || 0,
-          totalDue: receipt?.total || 0,
-          debt: (receipt?.total || 0) - (receipt?.paidAmount || 0),
-        });
-      } else {
-        reportData[building].push({
-          propertyName: prop?.name,
-          tenantName: '-',
-          paidAmount: 0,
-          totalDue: 0,
-          debt: 0,
-        });
-      }
+      // PAGO: suma de paidAmount en el mes
+      const paidAmount = propReceipts.reduce((sum, r: any) => sum + toNumberSafe(r?.paidAmount), 0);
+      
+      // DEBE: balance actual del inquilino
+      const tenantDebt = tenant ? toNumberSafe(tenant?.balance) : 0;
+
+      reportData[building].push({
+        propertyName: prop?.name,
+        tenantName: tenant?.name || '-',
+        paidAmount,
+        debt: tenantDebt,
+      });
     });
 
     // Calcular totales
     let totalPaid = 0;
-    let totalDue = 0;
+    let totalDebt = 0;
     Object.values(reportData).forEach((items) => {
       items.forEach((item) => {
         totalPaid += item.paidAmount;
-        totalDue += item.totalDue;
+        totalDebt += item.debt;
       });
     });
 
-    return { reportMonth, reportYear, monthName, reportData, buildingOrder, totalPaid, totalDue };
+    return { reportMonth, reportYear, monthName, reportData, buildingOrder, totalPaid, totalDebt };
   };
 
   const printReport = () => {
@@ -237,32 +263,29 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Resumen Mensual ${report.monthName} ${report.reportYear}</title>
+        <title>Resumen ${report.monthName} ${report.reportYear}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 20px; }
           .header { text-align: center; margin-bottom: 20px; }
-          .header h1 { margin: 0; font-size: 24px; }
-          .header-info { display: flex; justify-content: space-between; margin: 10px 0; font-weight: bold; }
-          .building-section { margin: 20px 0; page-break-inside: avoid; }
-          .building-title { background-color: #e8e8e8; padding: 10px; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+          .header-info { display: flex; gap: 40px; justify-content: center; margin: 10px 0; font-weight: bold; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th, td { border: 1px solid black; padding: 8px; text-align: left; }
           th { background-color: #ffff00; font-weight: bold; }
           .total-row { background-color: #ffff00; font-weight: bold; }
           .amount { text-align: right; }
-          .footer { margin-top: 40px; text-align: center; border-top: 1px solid #ddd; padding-top: 20px; }
+          .footer { margin-top: 40px; text-align: center; }
         </style>
       </head>
       <body>
         <div class="header">
           <h1>RESUMEN MENSUAL</h1>
           <div class="header-info">
-            <div>MES: <span>${report.monthName.toUpperCase()}</span></div>
-            <div>AÑO: <span>${report.reportYear}</span></div>
+            <div>MES <br/> <strong>${report.monthName.toUpperCase()}</strong></div>
+            <div>AÑO <br/> <strong>${report.reportYear}</strong></div>
           </div>
         </div>
 
-        <table style="width: 100%; margin-bottom: 30px;">
+        <table>
           <thead>
             <tr style="background-color: #ffff00;">
               <th>Edificio</th>
@@ -276,13 +299,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
     `;
 
     report.buildingOrder.forEach((building) => {
-      const color = getBuildingColor(building);
+      const bgColor = buildingColors[building] || '#f0f0f0';
       const items = report.reportData[building];
 
       items.forEach((item, index) => {
         reportHTML += `
-          <tr style="${index === 0 ? `background-color: ${color.light};` : ''}">
-            ${index === 0 ? `<td rowspan="${items.length}" style="background-color: ${color.light}; font-weight: bold;">${building}</td>` : ''}
+          <tr>
+            ${index === 0 ? `<td rowspan="${items.length}" style="background-color: ${bgColor}; font-weight: bold;">${building}</td>` : ''}
             <td>${item.tenantName}</td>
             <td>${item.propertyName}</td>
             <td class="amount">${item.paidAmount.toLocaleString()}</td>
@@ -297,11 +320,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
         </table>
 
         <div style="text-align: right; margin-top: 20px;">
-          <table style="width: 300px; margin-left: auto;">
+          <table style="width: 400px; margin-left: auto;">
             <tr class="total-row">
-              <td style="background-color: #ffff00; font-weight: bold;">TOTAL</td>
-              <td class="amount" style="background-color: #ffff00; font-weight: bold;">${report.totalPaid.toLocaleString()}</td>
-              <td class="amount" style="background-color: #ffff00; font-weight: bold;">${(report.totalDue - report.totalPaid).toLocaleString()}</td>
+              <td style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">TOTAL</td>
+              <td class="amount" style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">${report.totalPaid.toLocaleString()}</td>
+              <td class="amount" style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">${report.totalDebt.toLocaleString()}</td>
             </tr>
           </table>
         </div>
@@ -515,56 +538,59 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
             </div>
 
             {/* Report */}
-            <div id="report-content" className="bg-white">
+            <div id="report-content" className="bg-white border border-gray-300 p-6">
               {(() => {
                 const report = generateMonthlyReport();
                 return (
                   <>
-                    {/* Header */}
-                    <div className="text-center mb-6 pb-6 border-b-2 border-gray-800">
-                      <h1 className="text-2xl font-bold">RESUMEN MENSUAL</h1>
-                      <div className="flex justify-center gap-12 mt-3 font-bold">
-                        <div>MES <span className="block text-lg">{report.monthName.toUpperCase()}</span></div>
-                        <div>AÑO <span className="block text-lg">{report.reportYear}</span></div>
+                    {/* Header - TU FORMATO EXACTO */}
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <span className="font-bold">MES</span><br/>
+                        <span className="text-lg">{report.monthName.toUpperCase()}</span>
+                      </div>
+                      <div className="text-center">
+                        <h1 className="text-2xl font-bold">RESUMEN MENSUAL</h1>
+                      </div>
+                      <div>
+                        <span className="font-bold">AÑO</span><br/>
+                        <span className="text-lg">{report.reportYear}</span>
                       </div>
                     </div>
 
-                    {/* Buildings Table */}
+                    {/* Buildings Table - TU ESTRUCTURA EXACTA */}
                     <div className="overflow-x-auto mb-6">
-                      <table className="w-full border-collapse">
+                      <table className="w-full border-collapse border border-black">
                         <thead>
                           <tr style={{ backgroundColor: '#ffff00' }}>
-                            <th className="border border-gray-300 px-4 py-2 text-left font-bold">Edificio</th>
-                            <th className="border border-gray-300 px-4 py-2 text-left font-bold">Inquilino</th>
-                            <th className="border border-gray-300 px-4 py-2 text-left font-bold">Propiedad</th>
-                            <th className="border border-gray-300 px-4 py-2 text-right font-bold">PAGO</th>
-                            <th className="border border-gray-300 px-4 py-2 text-right font-bold">DEBE</th>
+                            <th className="border border-black px-4 py-2 text-left font-bold">Edificio</th>
+                            <th className="border border-black px-4 py-2 text-left font-bold">Inquilino</th>
+                            <th className="border border-black px-4 py-2 text-left font-bold">Propiedad</th>
+                            <th className="border border-black px-4 py-2 text-right font-bold">PAGO</th>
+                            <th className="border border-black px-4 py-2 text-right font-bold">DEBE</th>
                           </tr>
                         </thead>
                         <tbody>
                           {report.buildingOrder.map((building) => {
-                            const color = getBuildingColor(building);
+                            const bgColor = buildingColors[building] || '#f0f0f0';
                             const items = report.reportData[building];
                             return items.map((item, idx) => (
                               <tr
                                 key={`${building}-${idx}`}
-                                style={{
-                                  backgroundColor: idx === 0 ? color.light : 'white',
-                                }}
                               >
                                 {idx === 0 && (
                                   <td
                                     rowSpan={items.length}
-                                    className={`border border-gray-300 px-4 py-2 font-bold ${color.text}`}
-                                    style={{ backgroundColor: color.light }}
+                                    className="border border-black px-4 py-2 font-bold"
+                                    style={{ backgroundColor: bgColor }}
                                   >
                                     {building}
                                   </td>
                                 )}
-                                <td className="border border-gray-300 px-4 py-2">{item.tenantName}</td>
-                                <td className="border border-gray-300 px-4 py-2">{item.propertyName}</td>
-                                <td className="border border-gray-300 px-4 py-2 text-right">{item.paidAmount.toLocaleString()}</td>
-                                <td className="border border-gray-300 px-4 py-2 text-right">{item.debt.toLocaleString()}</td>
+                                <td className="border border-black px-4 py-2">{item.tenantName}</td>
+                                <td className="border border-black px-4 py-2">{item.propertyName}</td>
+                                <td className="border border-black px-4 py-2 text-right">{item.paidAmount.toLocaleString()}</td>
+                                <td className="border border-black px-4 py-2 text-right">{item.debt.toLocaleString()}</td>
                               </tr>
                             ));
                           })}
@@ -574,12 +600,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
 
                     {/* Totals */}
                     <div className="flex justify-end mb-6">
-                      <table className="w-80 border-collapse">
+                      <table className="border-collapse border border-black" style={{ width: '300px' }}>
                         <tbody>
                           <tr style={{ backgroundColor: '#ffff00' }}>
-                            <td className="border border-gray-300 px-4 py-2 font-bold">TOTAL</td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-bold">{report.totalPaid.toLocaleString()}</td>
-                            <td className="border border-gray-300 px-4 py-2 text-right font-bold">{(report.totalDue - report.totalPaid).toLocaleString()}</td>
+                            <td className="border border-black px-4 py-2 font-bold">TOTAL</td>
+                            <td className="border border-black px-4 py-2 text-right font-bold">{report.totalPaid.toLocaleString()}</td>
+                            <td className="border border-black px-4 py-2 text-right font-bold">{report.totalDebt.toLocaleString()}</td>
                           </tr>
                         </tbody>
                       </table>
