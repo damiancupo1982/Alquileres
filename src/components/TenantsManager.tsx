@@ -30,6 +30,17 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     guarantorPhone: ''
   });
 
+  // Calcular saldo real del inquilino basado en recibos pendientes
+  const calculateTenantBalance = (tenantName: string): number => {
+    const tenantReceipts = Array.isArray(receipts) ? receipts.filter(r => r?.tenant === tenantName) : [];
+    
+    const totalOwed = tenantReceipts
+      .filter(r => r?.status === 'pendiente' || r?.status === 'vencido' || r?.status === 'pendiente_confirmacion')
+      .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+    
+    return totalOwed;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -178,97 +189,100 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {tenants.map((tenant) => (
-                <tr key={tenant.id} className={`hover:bg-gray-50 ${tenant.balance > 0 ? 'bg-red-50' : ''}`}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="h-5 w-5 text-blue-600" />
+              {tenants.map((tenant) => {
+                const balance = calculateTenantBalance(tenant.name);
+                return (
+                  <tr key={tenant.id} className={`hover:bg-gray-50 ${balance > 0 ? 'bg-red-50' : ''}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <User className="h-5 w-5 text-blue-600" />
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
+                          <div className="text-sm text-gray-500">
+                            Depósito: ${tenant.deposit.toLocaleString()}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Garante: {tenant.guarantor.name}
+                          </div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <div className="flex items-center text-sm text-gray-900">
+                          <Mail className="h-4 w-4 mr-2 text-gray-400" />
+                          {tenant.email}
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                          {tenant.phone}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{tenant.property}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        <div className="flex items-center text-sm text-gray-900">
+                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                          Inicio: {tenant.contractStart}
+                        </div>
                         <div className="text-sm text-gray-500">
-                          Depósito: ${tenant.deposit.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Garante: {tenant.guarantor.name}
+                          Vence: {tenant.contractEnd}
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                        {tenant.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className={`text-sm font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        ${balance.toLocaleString()}
                       </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Phone className="h-4 w-4 mr-2 text-gray-400" />
-                        {tenant.phone}
+                      <div className="text-xs text-gray-500">
+                        {balance > 0 ? '⚠️ Debe' : '✓ Al día'}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{tenant.property}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="space-y-1">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                        Inicio: {tenant.contractStart}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Vence: {tenant.contractEnd}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className={`text-sm font-semibold ${tenant.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      ${tenant.balance.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {tenant.balance > 0 ? '⚠️ Debe' : '✓ Al día'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col space-y-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
-                        {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                      </span>
-                      {tenant.balance > 0 && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
-                          💰 Debe ${tenant.balance.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col space-y-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
+                          {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
                         </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleViewDetails(tenant)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Ver detalles"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(tenant)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(tenant.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {balance > 0 && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+                            💰 Debe ${balance.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => handleViewDetails(tenant)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Ver detalles"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(tenant)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(tenant.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
