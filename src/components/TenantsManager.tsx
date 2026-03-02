@@ -70,6 +70,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       const prop = properties.find(p => p.id === tenant.propertyId);
       const balance = calculateTenantBalance(tenant.name);
       const status = balance > 0 ? 'Deudor' : 'Pagado';
+      const deposit = tenant.deposit || 0;
       
       return [
         `"${tenant.name}"`,
@@ -81,7 +82,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         tenant.contractEnd,
         balance,
         status,
-        tenant.deposit
+        deposit
       ];
     });
 
@@ -155,10 +156,10 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       propertyId: tenant.propertyId?.toString() || '',
       contractStart: tenant.contractStart,
       contractEnd: tenant.contractEnd,
-      deposit: tenant.deposit.toString(),
-      guarantorName: tenant.guarantor.name,
-      guarantorEmail: tenant.guarantor.email,
-      guarantorPhone: tenant.guarantor.phone
+      deposit: String(tenant.deposit || 0),
+      guarantorName: tenant.guarantor?.name || '',
+      guarantorEmail: tenant.guarantor?.email || '',
+      guarantorPhone: tenant.guarantor?.phone || ''
     });
     setShowModal(true);
   };
@@ -299,8 +300,11 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
               {filteredTenants.map((tenant) => {
                 const balance = calculateTenantBalance(tenant.name);
                 const prop = properties.find(p => p.id === tenant.propertyId);
+                const deposit = tenant.deposit || 0;
+                const guarantorName = tenant.guarantor?.name || '-';
+                
                 return (
-                  <tr key={tenant.id} className={`hover:bg-gray-50 ${balance > 0 ? 'bg-red-50' : ''}`}>
+                  <tr key={`tenant-${tenant.id}`} className={`hover:bg-gray-50 ${balance > 0 ? 'bg-red-50' : ''}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
@@ -310,8 +314,8 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
-                          <div className="text-sm text-gray-500">Depósito: ${tenant.deposit.toLocaleString()}</div>
-                          <div className="text-sm text-gray-500">Garante: {tenant.guarantor.name}</div>
+                          <div className="text-sm text-gray-500">Depósito: ${deposit.toLocaleString()}</div>
+                          <div className="text-sm text-gray-500">Garante: {guarantorName}</div>
                         </div>
                       </div>
                     </td>
@@ -590,9 +594,10 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                     const prop = properties.find(p => p.id === tenant.propertyId);
                     const balance = calculateTenantBalance(tenant.name);
                     const status = balance > 0 ? 'Deudor' : 'Pagado';
+                    const deposit = tenant.deposit || 0;
 
                     return (
-                      <tr key={tenant.id} className={balance > 0 ? 'bg-red-50' : ''}>
+                      <tr key={`preview-${tenant.id}`} className={balance > 0 ? 'bg-red-50' : ''}>
                         <td className="border border-gray-300 px-3 py-2">{tenant.name}</td>
                         <td className="border border-gray-300 px-3 py-2">{tenant.email}</td>
                         <td className="border border-gray-300 px-3 py-2">{tenant.phone}</td>
@@ -604,7 +609,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                           ${balance.toLocaleString()}
                         </td>
                         <td className="border border-gray-300 px-3 py-2">{status}</td>
-                        <td className="border border-gray-300 px-3 py-2 text-right">${tenant.deposit.toLocaleString()}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">${deposit.toLocaleString()}</td>
                       </tr>
                     );
                   })}
