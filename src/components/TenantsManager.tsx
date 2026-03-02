@@ -179,7 +179,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {tenants.map((tenant) => (
-                <tr key={tenant.id} className="hover:bg-gray-50">
+                <tr key={tenant.id} className={`hover:bg-gray-50 ${tenant.balance > 0 ? 'bg-red-50' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
@@ -229,13 +229,20 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                       ${tenant.balance.toLocaleString()}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {tenant.balance > 0 ? 'Debe' : 'Al día'}
+                      {tenant.balance > 0 ? '⚠️ Debe' : '✓ Al día'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
-                      {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
-                    </span>
+                    <div className="flex flex-col space-y-2">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tenant.status)}`}>
+                        {tenant.status.charAt(0).toUpperCase() + tenant.status.slice(1)}
+                      </span>
+                      {tenant.balance > 0 && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+                          💰 Debe ${tenant.balance.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
