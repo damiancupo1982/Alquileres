@@ -23,58 +23,65 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     .filter(r => r?.status === 'pendiente' || r?.status === 'pendiente_confirmacion')
     .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
 
-  // Construir tabla de movimientos con saldos actualizados - LÓGICA CORRECTA
-  const movements = tenantReceipts
-    .sort((a, b) => {
-      // Crear fechas válidas para ordenamiento
-      const monthA = String(a.month).padStart(2, '0');
-      const monthB = String(b.month).padStart(2, '0');
-      const dateA = new Date(`${a.year}-${monthA}-01`);
-      const dateB = new Date(`${b.year}-${monthB}-01`);
-      return dateA.getTime() - dateB.getTime();
-    })
-    .map((receipt, index, sortedArray) => {
-      const monthStr = String(receipt.month).padStart(2, '0');
-      const rentAmount = receipt.rent || 0;
-      const expensesAmount = receipt.expenses || 0;
-      const totalDue = rentAmount + expensesAmount;
-      
-      // Obtener el pago realizado
-      const paymentMade = (receipt.status === 'pagado' || receipt.status === 'confirmado') ? totalDue : 0;
+  // Construir tabla con DOS renglones por mes: vencimiento y pago
+  const movements = [];
+  let runningBalance = 0;
 
-      // Calcular saldo anterior
-      let previousBalance = 0;
-      if (index > 0) {
-        const previousReceipt = sortedArray[index - 1];
-        const prevTotalDue = (previousReceipt.rent || 0) + (previousReceipt.expenses || 0);
-        const prevPaymentMade = (previousReceipt.status === 'pagado' || previousReceipt.status === 'confirmado') ? prevTotalDue : 0;
-        
-        // Recalcular todos los saldos anteriores hasta el índice anterior
-        let calculatedBalance = 0;
-        for (let i = 0; i < index; i++) {
-          const curr = sortedArray[i];
-          const currTotalDue = (curr.rent || 0) + (curr.expenses || 0);
-          const currPaymentMade = (curr.status === 'pagado' || curr.status === 'confirmado') ? currTotalDue : 0;
-          calculatedBalance = calculatedBalance + currTotalDue - currPaymentMade;
-        }
-        previousBalance = calculatedBalance;
-      }
+  // Ordenar recibos cronológicamente
+  const sortedReceipts = [...tenantReceipts].sort((a, b) => {
+    const monthA = String(a.month).padStart(2, '0');
+    const monthB = String(b.month).padStart(2, '0');
+    const dateA = new Date(`${a.year}-${monthA}-01`);
+    const dateB = new Date(`${b.year}-${monthB}-01`);
+    return dateA.getTime() - dateB.getTime();
+  });
 
-      // Saldo actualizado = saldo anterior + lo que debe - lo que pagó
-      const balanceUpdated = previousBalance + totalDue - paymentMade;
+  // Crear renglones: primero vencimiento, después pago
+  sortedReceipts.forEach((receipt) => {
+    const monthStr = String(receipt.month).padStart(2, '0');
+    const rentAmount = receipt.rent || 0;
+    const expensesAmount = receipt.expenses || 0;
+    const totalDue = rentAmount + expensesAmount;
+    const dueDate = receipt.dueDate || `${receipt.year}-${monthStr}-10`;
+    const paymentDate = receipt.paymentDate || `${receipt.year}-${monthStr}-15`;
+    
+    const paymentMade = (receipt.status === 'pagado' || receipt.status === 'confirmado') ? totalDue : 0;
 
-      return {
-        ...receipt,
-        monthStr,
-        dueDate: receipt.dueDate || `${receipt.year}-${monthStr}-10`, // Asumiendo pago el 10 de cada mes
-        rentAmount,
-        expensesAmount,
-        totalDue,
-        paymentMade,
-        previousBalance,
-        balanceUpdated
-      };
+    // RENGLÓN 1: VENCIMIENTO DEL MES
+    movements.push({
+      type: 'due',
+      date: dueDate,
+      monthLabel: `${receipt.month} ${receipt.year}`,
+      rent: rentAmount,
+      expenses: expensesAmount,
+      must: totalDue,
+      previousBalance: runningBalance,
+      payment: 0,
+      status: receipt.status,
+      newBalance: runningBalance + totalDue // Después de vencer, suma la deuda
     });
+
+    // RENGLÓN 2: PAGO
+    if (paymentMade > 0) {
+      const newBalance = runningBalance + totalDue - paymentMade;
+      movements.push({
+        type: 'payment',
+        date: paymentDate,
+        monthLabel: 'PAGO',
+        rent: 0,
+        expenses: 0,
+        must: totalDue,
+        previousBalance: runningBalance + totalDue,
+        payment: paymentMade,
+        status: receipt.status,
+        newBalance: newBalance
+      });
+      runningBalance = newBalance;
+    } else {
+      // Si no hay pago, el saldo se mantiene con la deuda
+      runningBalance = runningBalance + totalDue;
+    }
+  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -197,7 +204,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
               </div>
             </div>
 
-            {/* Tabla de Movimientos Detallada */}
+            {/* Tabla de Movimientos Detallada - CUENTA CORRIENTE */}
             {tenantReceipts.length > 0 ? (
               <div className="bg-white rounded-lg overflow-hidden border border-gray-300">
                 <div className="overflow-x-auto">
@@ -208,39 +215,45 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
                         <th className="text-left py-3 px-3 font-bold text-gray-700">Mes</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Alquiler</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Expensas</th>
-                        <th className="text-right py-3 px-3 font-bold text-gray-700">Total Adeudado</th>
+                        <th className="text-right py-3 px-3 font-bold text-gray-700">DEBE</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Anterior</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Pago Realizado</th>
                         <th className="text-right py-3 px-3 font-bold text-gray-700">Saldo Actualizado</th>
-                        <th className="text-center py-3 px-3 font-bold text-gray-700">Estado</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {movements.map((movement, idx) => (
-                        <tr key={idx} className={`hover:bg-gray-50 ${movement.balanceUpdated > 0 ? 'bg-red-50' : ''}`}>
-                          <td className="py-3 px-3 font-medium text-gray-900">{movement.dueDate}</td>
-                          <td className="py-3 px-3 text-gray-900">{movement.month} {movement.year}</td>
-                          <td className="py-3 px-3 text-right text-gray-900">${movement.rentAmount.toLocaleString('es-AR')}</td>
-                          <td className="py-3 px-3 text-right text-gray-900">${movement.expensesAmount.toLocaleString('es-AR')}</td>
-                          <td className="py-3 px-3 text-right font-semibold text-gray-900">${movement.totalDue.toLocaleString('es-AR')}</td>
-                          <td className="py-3 px-3 text-right font-semibold text-gray-600">${movement.previousBalance.toLocaleString('es-AR')}</td>
-                          <td className={`py-3 px-3 text-right font-bold ${movement.paymentMade > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                            ${movement.paymentMade.toLocaleString('es-AR')}
-                          </td>
-                          <td className={`py-3 px-3 text-right font-bold ${movement.balanceUpdated > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            ${movement.balanceUpdated.toLocaleString('es-AR')}
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${
-                              movement.status === 'pagado' || movement.status === 'confirmado' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {movement.status === 'pagado' || movement.status === 'confirmado' ? '✓ Pagado' : '⏳ Pendiente'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {movements.map((movement, idx) => {
+                        const isFuture = movement.type === 'due';
+                        const rowColor = movement.newBalance > 0 ? 'bg-red-50' : 'bg-green-50';
+                        
+                        return (
+                          <tr 
+                            key={idx} 
+                            className={`hover:bg-gray-50 ${rowColor} ${isFuture ? 'font-semibold' : ''}`}
+                          >
+                            <td className="py-3 px-3 text-gray-900">{movement.date}</td>
+                            <td className="py-3 px-3 text-gray-900">{movement.monthLabel}</td>
+                            <td className="py-3 px-3 text-right text-gray-900">
+                              {movement.type === 'due' ? `$ ${movement.rent.toLocaleString('es-AR')}` : '-'}
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-900">
+                              {movement.type === 'due' ? `$ ${movement.expenses.toLocaleString('es-AR')}` : '-'}
+                            </td>
+                            <td className="py-3 px-3 text-right font-semibold text-gray-900">
+                              {movement.type === 'due' ? `$ ${movement.must.toLocaleString('es-AR')}` : `$ ${movement.must.toLocaleString('es-AR')}`}
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-600">
+                              $ {movement.previousBalance.toLocaleString('es-AR')}
+                            </td>
+                            <td className={`py-3 px-3 text-right font-bold ${movement.payment > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                              {movement.payment > 0 ? `$ ${movement.payment.toLocaleString('es-AR')}` : '-'}
+                            </td>
+                            <td className={`py-3 px-3 text-right font-bold ${movement.newBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              $ {movement.newBalance.toLocaleString('es-AR')}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
