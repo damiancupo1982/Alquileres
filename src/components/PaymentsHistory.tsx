@@ -24,12 +24,12 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
     tenant: receipt.tenant,
     property: receipt.property,
     building: receipt.building,
-    amount: receipt.paidAmount,
+    amount: receipt.paidAmount || 0,
     paymentDate: receipt.createdDate,
     month: receipt.month,
     year: receipt.year,
     paymentMethod: receipt.paymentMethod,
-    status: receipt.status === 'pagado' ? 'confirmado' as const : 'pendiente_confirmacion' as const,
+    status: receipt.status === 'pagado' ? ('confirmado' as const) : ('pendiente_confirmacion' as const),
     receipt: receipt
   }));
 
@@ -39,7 +39,6 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
   ];
 
   const uniqueYears = [...new Set(receipts.map(r => r.year))].sort((a, b) => b - a);
-
   const uniqueTenants = [...new Set(payments.map(p => p.tenant))].sort();
   const uniqueProperties = [...new Set(payments.map(p => p.property))].sort();
   const uniqueBuildings = [...new Set(payments.map(p => p.building))].sort();
@@ -60,14 +59,14 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
     return yearMatch && monthMatch && statusMatch && tenantMatch && propertyMatch && buildingMatch && searchMatch;
   });
 
-  const totalAmount = filteredPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalAmount = filteredPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
   
   const monthlyStats = months.map(month => {
     const monthReceipts = receipts.filter(r => r.month === month && r.year === selectedYear);
     const theoreticalIncome = monthReceipts.reduce((sum, r) => sum + (r.total || 0), 0);
     
     const monthPayments = filteredPayments.filter(p => p.month === month);
-    const realIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+    const realIncome = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
     
     return {
       month,
@@ -225,7 +224,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
         payment.tenant,
         payment.property,
         payment.building,
-        payment.amount,
+        payment.amount || 0,
         getPaymentMethodLabel(payment.paymentMethod),
         payment.status
       ].join(','))
@@ -294,7 +293,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               {uniqueYears.map(year => (
-                <option key={year} value={year}>{year}</option>
+                <option key={`year-${year}`} value={year}>{year}</option>
               ))}
             </select>
           </div>
@@ -306,9 +305,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Todos los meses</option>
+              <option key="month-all" value="">Todos los meses</option>
               {months.map((month) => (
-                <option key={month} value={month}>{month}</option>
+                <option key={`month-${month}`} value={month}>{month}</option>
               ))}
             </select>
           </div>
@@ -320,9 +319,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedTenant(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Todos los inquilinos</option>
+              <option key="tenant-all" value="">Todos los inquilinos</option>
               {uniqueTenants.map((tenant) => (
-                <option key={tenant} value={tenant}>{tenant}</option>
+                <option key={`tenant-${tenant}`} value={tenant}>{tenant}</option>
               ))}
             </select>
           </div>
@@ -334,9 +333,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedProperty(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Todas las propiedades</option>
+              <option key="property-all" value="">Todas las propiedades</option>
               {uniqueProperties.map((property) => (
-                <option key={property} value={property}>{property}</option>
+                <option key={`property-${property}`} value={property}>{property}</option>
               ))}
             </select>
           </div>
@@ -348,9 +347,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedBuilding(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Todos los edificios</option>
+              <option key="building-all" value="">Todos los edificios</option>
               {uniqueBuildings.map((building) => (
-                <option key={building} value={building}>{building}</option>
+                <option key={`building-${building}`} value={building}>{building}</option>
               ))}
             </select>
           </div>
@@ -362,9 +361,9 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               onChange={(e) => setSelectedStatus(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Todos los estados</option>
-              <option value="confirmado">Confirmado</option>
-              <option value="pendiente_confirmacion">Pendiente confirmación</option>
+              <option key="status-all" value="">Todos los estados</option>
+              <option key="status-confirmado" value="confirmado">Confirmado</option>
+              <option key="status-pendiente" value="pendiente_confirmacion">Pendiente confirmación</option>
             </select>
           </div>
         </div>
@@ -414,7 +413,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
 
         <div className="grid grid-cols-12 gap-3">
           {monthlyStats.map((stat) => (
-            <div key={stat.month} className="text-center">
+            <div key={`chart-${stat.month}`} className="text-center">
               <div className="mb-2 flex gap-1 h-32 items-end justify-center">
                 <div
                   className="bg-blue-500 rounded-t w-3"
@@ -445,35 +444,20 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Recibo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Inquilino
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Propiedad
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Edificio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Monto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Método
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recibo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inquilino</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Propiedad</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Edificio</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Método</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {[...filteredPayments].sort((a, b) => b.id - a.id).map((payment) => (
-                <tr key={payment.id} className="hover:bg-gray-50">
+                <tr key={`payment-${payment.id}`} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 text-gray-400 mr-2" />
@@ -493,7 +477,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
                     <span className="text-sm text-gray-600">{payment.building}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-semibold text-gray-900">${payment.amount.toLocaleString()}</span>
+                    <span className="text-sm font-semibold text-gray-900">${(payment.amount || 0).toLocaleString()}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">{getPaymentMethodLabel(payment.paymentMethod)}</span>
@@ -589,7 +573,7 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
                     </tr>
                   )}
                   {selectedReceipt.otherCharges.map((charge, index) => (
-                    <tr key={index}>
+                    <tr key={`charge-${index}`}>
                       <td className="border border-gray-300 px-4 py-2">{charge.description}</td>
                       <td className="border border-gray-300 px-4 py-2 text-right">${charge.amount.toLocaleString()}</td>
                     </tr>
