@@ -484,9 +484,9 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
 
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <h4 className="text-sm font-semibold text-gray-900 mb-4">Información del Garante</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del garante</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
                     <input
                       type="text"
                       value={formData.guarantorName}
@@ -497,7 +497,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email del garante</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
                       type="email"
                       value={formData.guarantorEmail}
@@ -508,7 +508,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono del garante</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                     <input
                       type="tel"
                       value={formData.guarantorPhone}
@@ -563,7 +563,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
               <h3 className="text-lg font-semibold text-gray-900">Previsualización de Datos</h3>
               <button
                 onClick={() => setShowPreview(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 text-2xl"
               >
                 ✕
               </button>
@@ -595,4 +595,42 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                       <tr key={tenant.id} className={balance > 0 ? 'bg-red-50' : ''}>
                         <td className="border border-gray-300 px-3 py-2">{tenant.name}</td>
                         <td className="border border-gray-300 px-3 py-2">{tenant.email}</td>
-                        <td className="border border-gray-300 px-3 py-2
+                        <td className="border border-gray-300 px-3 py-2">{tenant.phone}</td>
+                        <td className="border border-gray-300 px-3 py-2">{prop?.name || 'Sin asignar'}</td>
+                        <td className="border border-gray-300 px-3 py-2">{prop?.building || 'Sin edificio'}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.contractStart}</td>
+                        <td className="border border-gray-300 px-3 py-2">{tenant.contractEnd}</td>
+                        <td className={`border border-gray-300 px-3 py-2 text-right font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${balance.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2">{status}</td>
+                        <td className="border border-gray-300 px-3 py-2 text-right">${tenant.deposit.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex justify-end space-x-2">
+              <button
+                onClick={() => setShowPreview(false)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={generateCSV}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Descargar CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TenantsManager;
