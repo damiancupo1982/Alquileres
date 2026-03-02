@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, User, Phone, Mail, Calendar, Edit, Trash2, Eye, Filter, Download, Eye as EyeIcon } from 'lucide-react';
-import { Tenant, Property } from '../App';
+import { Tenant, Property, Receipt } from '../App';
 import TenantDetailModal from './TenantDetailModal';
 
 interface TenantsManagerProps {
   tenants: Tenant[];
   setTenants: React.Dispatch<React.SetStateAction<Tenant[]>>;
   properties: Property[];
-  receipts: any[];
+  receipts: Receipt[];
   updatePropertyTenant: (propertyId: number | null, tenantName: string | null, oldPropertyId?: number | null) => void;
 }
 
@@ -33,18 +33,16 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     guarantorPhone: ''
   });
 
-  // Calcular saldo real del inquilino basado en recibos pendientes
   const calculateTenantBalance = (tenantName: string): number => {
-    const tenantReceipts = Array.isArray(receipts) ? receipts.filter(r => r?.tenant === tenantName) : [];
+    const tenantReceipts = Array.isArray(receipts) ? receipts.filter((r: any) => r?.tenant === tenantName) : [];
     
     const totalOwed = tenantReceipts
-      .filter(r => r?.status === 'pendiente' || r?.status === 'vencido' || r?.status === 'pendiente_confirmacion')
-      .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+      .filter((r: any) => r?.status === 'pendiente' || r?.status === 'vencido' || r?.status === 'pendiente_confirmacion')
+      .reduce((sum, r: any) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
     
     return totalOwed;
   };
 
-  // Obtener lista única de edificios
   const buildings = useMemo(() => {
     return [...new Set(tenants.map(t => {
       const prop = properties.find(p => p.id === t.propertyId);
@@ -52,7 +50,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     }))].sort();
   }, [tenants, properties]);
 
-  // Filtrar inquilinos
   const filteredTenants = useMemo(() => {
     return tenants.filter(tenant => {
       const prop = properties.find(p => p.id === tenant.propertyId);
@@ -67,7 +64,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     });
   }, [tenants, filterBuilding, filterStatus, properties, receipts]);
 
-  // Generar CSV
   const generateCSV = () => {
     const headers = ['Inquilino', 'Email', 'Teléfono', 'Propiedad', 'Edificio', 'Contrato Inicio', 'Contrato Fin', 'Saldo', 'Estado', 'Depósito'];
     const rows = filteredTenants.map(tenant => {
@@ -222,14 +218,12 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         </button>
       </div>
 
-      {/* Filtros y estadísticas */}
+      {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Filtros */}
           <div className="flex items-center space-x-4">
             <Filter className="h-5 w-5 text-gray-400" />
             
-            {/* Filtro Edificio */}
             <select
               value={filterBuilding}
               onChange={(e) => setFilterBuilding(e.target.value)}
@@ -241,7 +235,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
               ))}
             </select>
 
-            {/* Filtro Estado */}
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
@@ -253,7 +246,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
             </select>
           </div>
 
-          {/* Botones de acción */}
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowPreview(true)}
@@ -272,7 +264,6 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
           </div>
         </div>
 
-        {/* Estadísticas */}
         <div className="mt-4 grid grid-cols-3 gap-4">
           <div className="bg-gray-50 rounded-lg p-3">
             <p className="text-xs text-gray-600">Total Inquilinos</p>
@@ -295,27 +286,13 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Inquilino
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Contacto
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Propiedad
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Contrato
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Saldo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inquilino</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Propiedad</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contrato</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -333,12 +310,8 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
-                          <div className="text-sm text-gray-500">
-                            Depósito: ${tenant.deposit.toLocaleString()}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Garante: {tenant.guarantor.name}
-                          </div>
+                          <div className="text-sm text-gray-500">Depósito: ${tenant.deposit.toLocaleString()}</div>
+                          <div className="text-sm text-gray-500">Garante: {tenant.guarantor.name}</div>
                         </div>
                       </div>
                     </td>
@@ -364,18 +337,14 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                           <Calendar className="h-4 w-4 mr-2 text-gray-400" />
                           Inicio: {tenant.contractStart}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Vence: {tenant.contractEnd}
-                        </div>
+                        <div className="text-sm text-gray-500">Vence: {tenant.contractEnd}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         ${balance.toLocaleString()}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {balance > 0 ? '⚠️ Debe' : '✓ Al día'}
-                      </div>
+                      <div className="text-xs text-gray-500">{balance > 0 ? '⚠️ Debe' : '✓ Al día'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col space-y-2">
@@ -420,7 +389,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         </div>
       </div>
 
-      {/* Modal para agregar/editar */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -574,8 +543,8 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         </div>
       )}
 
-      {/* Modal de detalle del inquilino */}
-      {showDetailModal && (
+      {/* Detail Modal */}
+      {showDetailModal && selectedTenant && (
         <TenantDetailModal 
           tenant={selectedTenant} 
           receipts={receipts}
@@ -586,7 +555,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         />
       )}
 
-      {/* Modal de previsualización CSV */}
+      {/* Preview Modal */}
       {showPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -626,42 +595,4 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                       <tr key={tenant.id} className={balance > 0 ? 'bg-red-50' : ''}>
                         <td className="border border-gray-300 px-3 py-2">{tenant.name}</td>
                         <td className="border border-gray-300 px-3 py-2">{tenant.email}</td>
-                        <td className="border border-gray-300 px-3 py-2">{tenant.phone}</td>
-                        <td className="border border-gray-300 px-3 py-2">{prop?.name || 'Sin asignar'}</td>
-                        <td className="border border-gray-300 px-3 py-2">{prop?.building || 'Sin edificio'}</td>
-                        <td className="border border-gray-300 px-3 py-2">{tenant.contractStart}</td>
-                        <td className="border border-gray-300 px-3 py-2">{tenant.contractEnd}</td>
-                        <td className={`border border-gray-300 px-3 py-2 text-right font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          ${balance.toLocaleString()}
-                        </td>
-                        <td className="border border-gray-300 px-3 py-2">{status}</td>
-                        <td className="border border-gray-300 px-3 py-2 text-right">${tenant.deposit.toLocaleString()}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex justify-end space-x-2">
-              <button
-                onClick={() => setShowPreview(false)}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={generateCSV}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Descargar CSV
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default TenantsManager;
+                        <td className="border border-gray-300 px-3 py-2
