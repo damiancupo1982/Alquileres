@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { Plus, User, Phone, Mail, Calendar, Edit, Trash2, Eye } from 'lucide-react';
 import { Tenant, Property } from '../App';
+import TenantDetailModal from './TenantDetailModal';
 
 interface TenantsManagerProps {
   tenants: Tenant[];
   setTenants: React.Dispatch<React.SetStateAction<Tenant[]>>;
   properties: Property[];
+  receipts: any[];
   updatePropertyTenant: (propertyId: number | null, tenantName: string | null, oldPropertyId?: number | null) => void;
 }
 
-const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, properties, updatePropertyTenant }) => {
+const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, properties, receipts, updatePropertyTenant }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -31,7 +35,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     
     const selectedProperty = properties.find(p => p.id.toString() === formData.propertyId);
     const oldPropertyId = editingTenant?.propertyId;
-    
+
     const newTenant: Tenant = {
       id: editingTenant ? editingTenant.id : Date.now(),
       name: formData.name,
@@ -41,21 +45,21 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       property: selectedProperty?.name || '',
       contractStart: formData.contractStart,
       contractEnd: formData.contractEnd,
-      deposit: parseFloat(formData.deposit),
+      deposit: parseInt(formData.deposit) || 0,
       guarantor: {
         name: formData.guarantorName,
         email: formData.guarantorEmail,
         phone: formData.guarantorPhone
       },
       balance: editingTenant?.balance || 0,
-      status: 'activo'
+      status: editingTenant?.status || 'activo'
     };
 
     if (editingTenant) {
       setTenants(tenants.map(t => t.id === editingTenant.id ? newTenant : t));
-      // Actualizar propiedades si cambió la asignación
       if (oldPropertyId !== newTenant.propertyId) {
-        updatePropertyTenant(newTenant.propertyId, newTenant.name, oldPropertyId);
+        if (oldPropertyId) updatePropertyTenant(null, null, oldPropertyId);
+        if (newTenant.propertyId) updatePropertyTenant(newTenant.propertyId, newTenant.name);
       }
     } else {
       setTenants([...tenants, newTenant]);
@@ -101,6 +105,11 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
     }
   };
 
+  const handleViewDetails = (tenant: Tenant) => {
+    setSelectedTenant(tenant);
+    setShowDetailModal(true);
+  };
+
   const getStatusColor = (status: Tenant['status']) => {
     switch (status) {
       case 'activo': return 'bg-green-100 text-green-800';
@@ -117,6 +126,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
       (editingTenant && property.id === editingTenant.propertyId)
     );
   };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -229,7 +239,11 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button className="text-gray-400 hover:text-blue-600 transition-colors">
+                      <button 
+                        onClick={() => handleViewDetails(tenant)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Ver detalles"
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
@@ -253,7 +267,7 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal para agregar/editar */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
@@ -291,6 +305,17 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Depósito</label>
+                  <input
+                    type="number"
+                    value={formData.deposit}
+                    onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   />
@@ -335,20 +360,9 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Depósito ($)</label>
-                <input
-                  type="number"
-                  value={formData.deposit}
-                  onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <h4 className="text-md font-medium text-gray-900 mb-3">Datos del Garante</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-4">Información del Garante</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del garante</label>
                     <input
@@ -405,6 +419,18 @@ const TenantsManager: React.FC<TenantsManagerProps> = ({ tenants, setTenants, pr
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de detalle del inquilino */}
+      {showDetailModal && (
+        <TenantDetailModal 
+          tenant={selectedTenant} 
+          receipts={receipts}
+          onClose={() => {
+            setShowDetailModal(false);
+            setSelectedTenant(null);
+          }}
+        />
       )}
     </div>
   );
