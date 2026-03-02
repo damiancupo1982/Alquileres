@@ -13,40 +13,40 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
 
   // Filtrar recibos del inquilino actual
   const tenantReceipts = Array.isArray(receipts) ? receipts.filter(r => r?.tenant === tenant.name) : [];
-console.log('RECIBOS DEL INQUILINO:', JSON.stringify(tenantReceipts, null, 2));
-console.log('PRIMER RECIBO:', tenantReceipts[0]);
-  // Calcular resumen de pagos
+
+  // Calcular resumen de pagos usando los datos reales
   const totalPaid = tenantReceipts
     .filter(r => r?.status === 'pagado' || r?.status === 'confirmado')
-    .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+    .reduce((sum, r) => sum + (r?.paidAmount || 0), 0);
 
   const totalPending = tenantReceipts
-    .filter(r => r?.status === 'pendiente' || r?.status === 'pendiente_confirmacion')
-    .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
+    .filter(r => r?.status === 'pendiente' || r?.status === 'pendiente_confirmacion' || r?.status === 'borrador')
+    .reduce((sum, r) => sum + ((r?.total || 0) - (r?.paidAmount || 0)), 0);
 
   // Construir tabla con DOS renglones por mes: vencimiento y pago
   const movements = [];
   let runningBalance = 0;
 
-  // Ordenar recibos cronológicamente (de más antiguo a más reciente)
+  // Ordenar recibos cronológicamente usando dueDate (de más antiguo a más reciente)
   const sortedReceipts = [...tenantReceipts].sort((a, b) => {
-    const monthA = String(a.month).padStart(2, '0');
-    const monthB = String(b.month).padStart(2, '0');
-    const dateA = new Date(`${a.year}-${monthA}-01`);
-    const dateB = new Date(`${b.year}-${monthB}-01`);
+    const dateA = new Date(a?.dueDate || '2000-01-01');
+    const dateB = new Date(b?.dueDate || '2000-01-01');
     return dateA.getTime() - dateB.getTime();
   });
 
+  console.log('RECIBOS ORDENADOS:', sortedReceipts.map(r => ({ month: r.month, year: r.year, dueDate: r.dueDate, total: r.total, paid: r.paidAmount })));
+
   // Crear renglones en orden cronológico con saldos correctos
   sortedReceipts.forEach((receipt) => {
-    const monthStr = String(receipt.month).padStart(2, '0');
-    const rentAmount = receipt.rent || 0;
-    const expensesAmount = receipt.expenses || 0;
-    const totalDue = rentAmount + expensesAmount;
-    const dueDate = receipt.dueDate || `${receipt.year}-${monthStr}-10`;
-    const paymentDate = receipt.paymentDate || `${receipt.year}-${monthStr}-15`;
+    const totalDue = receipt.total || 0; // Usar el total real que incluye otros cargos
+    const paymentMade = receipt.paidAmount || 0; // Usar el pago real
+    const dueDate = receipt.dueDate || '2000-01-01';
     
-    const paymentMade = (receipt.status === 'pagado' || receipt.status === 'confirmado') ? totalDue : 0;
+    // Calcular fecha de pago (10 días después de la fecha de vencimiento)
+    const dueDateObj = new Date(dueDate);
+    const paymentDateObj = new Date(dueDateObj);
+    paymentDateObj.setDate(paymentDateObj.getDate() + 5); // 5 días después
+    const paymentDateStr = paymentDateObj.toISOString().split('T')[0];
 
     const previousBalanceBeforeDue = runningBalance;
     const balanceAfterDue = previousBalanceBeforeDue + totalDue;
@@ -56,22 +56,22 @@ console.log('PRIMER RECIBO:', tenantReceipts[0]);
     movements.push({
       type: 'due',
       date: dueDate,
-      sortDate: new Date(`${receipt.year}-${monthStr}-10`),
+      sortDate: new Date(dueDate),
       monthLabel: `${receipt.month} ${receipt.year}`,
-      rent: rentAmount,
-      expenses: expensesAmount,
+      rent: receipt.rent || 0,
+      expenses: receipt.expenses || 0,
       total: totalDue,
       previousBalance: previousBalanceBeforeDue,
       payment: 0,
       newBalance: balanceAfterDue
     });
 
-    // RENGLÓN 2: PAGO
+    // RENGLÓN 2: PAGO (solo si hay pago)
     if (paymentMade > 0) {
       movements.push({
         type: 'payment',
-        date: paymentDate,
-        sortDate: new Date(`${receipt.year}-${monthStr}-15`),
+        date: paymentDateStr,
+        sortDate: new Date(paymentDateStr),
         monthLabel: 'PAGO',
         rent: 0,
         expenses: 0,
@@ -87,7 +87,6 @@ console.log('PRIMER RECIBO:', tenantReceipts[0]);
   });
 
   // Ordenar solo para visualización (de más reciente a más antiguo)
-  // pero sin cambiar los saldos que ya calculamos correctamente
   const sortedMovements = [...movements].sort((a, b) => {
     return b.sortDate.getTime() - a.sortDate.getTime();
   });
