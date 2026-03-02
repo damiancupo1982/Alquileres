@@ -24,7 +24,6 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     .reduce((sum, r) => sum + ((r?.rent || 0) + (r?.expenses || 0)), 0);
 
   // Construir tabla con DOS renglones por mes: vencimiento y pago
-  // PASO 1: Crear movimientos en orden cronológico para calcular saldos correctamente
   const movements = [];
   let runningBalance = 0;
 
@@ -37,7 +36,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     return dateA.getTime() - dateB.getTime();
   });
 
-  // Crear renglones en orden cronológico
+  // Crear renglones en orden cronológico con saldos correctos
   sortedReceipts.forEach((receipt) => {
     const monthStr = String(receipt.month).padStart(2, '0');
     const rentAmount = receipt.rent || 0;
@@ -48,8 +47,11 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     
     const paymentMade = (receipt.status === 'pagado' || receipt.status === 'confirmado') ? totalDue : 0;
 
+    const previousBalanceBeforeDue = runningBalance;
+    const balanceAfterDue = previousBalanceBeforeDue + totalDue;
+    const balanceAfterPayment = balanceAfterDue - paymentMade;
+
     // RENGLÓN 1: VENCIMIENTO DEL MES
-    const balanceAfterDue = runningBalance + totalDue;
     movements.push({
       type: 'due',
       date: dueDate,
@@ -58,15 +60,13 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
       rent: rentAmount,
       expenses: expensesAmount,
       total: totalDue,
-      previousBalance: runningBalance,
+      previousBalance: previousBalanceBeforeDue,
       payment: 0,
-      status: receipt.status,
       newBalance: balanceAfterDue
     });
 
     // RENGLÓN 2: PAGO
     if (paymentMade > 0) {
-      const balanceAfterPayment = balanceAfterDue - paymentMade;
       movements.push({
         type: 'payment',
         date: paymentDate,
@@ -77,7 +77,6 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
         total: 0,
         previousBalance: balanceAfterDue,
         payment: paymentMade,
-        status: receipt.status,
         newBalance: balanceAfterPayment
       });
       runningBalance = balanceAfterPayment;
@@ -86,25 +85,10 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
     }
   });
 
-  // PASO 2: Ordenar por fecha DESCENDENTE (más reciente arriba) pero mantener saldos correctos
+  // Ordenar solo para visualización (de más reciente a más antiguo)
+  // pero sin cambiar los saldos que ya calculamos correctamente
   const sortedMovements = [...movements].sort((a, b) => {
     return b.sortDate.getTime() - a.sortDate.getTime();
-  });
-
-  // PASO 3: Recalcular saldos anteriores basándose en el nuevo orden
-  // Para cada movimiento, buscar su saldo anterior correcto del movimiento siguiente (que es más antiguo)
-  const movementsWithCorrectBalance = sortedMovements.map((movement, idx) => {
-    if (idx === 0) {
-      // El primer movimiento (más reciente) tiene el saldo actual como "nuevo saldo"
-      return movement;
-    } else {
-      // El saldo anterior es el "nuevo saldo" del movimiento anterior en la lista ordenada
-      const nextMovement = sortedMovements[idx - 1];
-      return {
-        ...movement,
-        previousBalance: nextMovement.newBalance
-      };
-    }
   });
 
   return (
@@ -246,7 +230,7 @@ const TenantDetailModal: React.FC<TenantDetailModalProps> = ({ tenant, receipts,
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {movementsWithCorrectBalance.map((movement, idx) => {
+                      {sortedMovements.map((movement, idx) => {
                         const isFuture = movement.type === 'due';
                         const rowColor = movement.newBalance > 0 ? 'bg-red-50' : 'bg-green-50';
                         
