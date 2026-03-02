@@ -1,193 +1,445 @@
-import React, { useMemo, useState } from 'react';
-import { Calendar, DollarSign, Filter, Download } from 'lucide-react';
+import React, { useState } from 'react';
 import { Calendar, DollarSign, Filter, Download, TrendingUp, Search, Eye, Printer, X } from 'lucide-react';
 import { Receipt } from '../App';
+
 interface PaymentsHistoryProps {
   receipts: Receipt[];
 }
 
 const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pagado' | 'pendiente'>('all');
-  const [filterMonth, setFilterMonth] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState('');
+  const [selectedProperty, setSelectedProperty] = useState('');
+  const [selectedBuilding, setSelectedBuilding] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
 
-  const safeDate = (v: unknown): Date | null => {
-    if (!v) return null;
-    const d = new Date(String(v));
-    return Number.isNaN(d.getTime()) ? null : d;
+  const payments = receipts.map(receipt => ({
+    id: receipt.id,
+    receiptNumber: receipt.receiptNumber,
+    tenant: receipt.tenant,
+    property: receipt.property,
+    building: receipt.building,
+    amount: receipt.paidAmount,
+    paymentDate: receipt.createdDate,
+    month: receipt.month,
+    year: receipt.year,
+    paymentMethod: receipt.paymentMethod,
+    status: receipt.status === 'pagado' ? 'confirmado' as const : 'pendiente_confirmacion' as const,
+    receipt: receipt
+  }));
+
+  const months = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const uniqueYears = [...new Set(receipts.map(r => r.year))].sort((a, b) => b - a);
+
+  const uniqueTenants = [...new Set(payments.map(p => p.tenant))].sort();
+  const uniqueProperties = [...new Set(payments.map(p => p.property))].sort();
+  const uniqueBuildings = [...new Set(payments.map(p => p.building))].sort();
+
+  const filteredPayments = payments.filter(payment => {
+    const yearMatch = payment.year === selectedYear;
+    const monthMatch = !selectedMonth || payment.month === selectedMonth;
+    const statusMatch = !selectedStatus || payment.status === selectedStatus;
+    const tenantMatch = !selectedTenant || payment.tenant === selectedTenant;
+    const propertyMatch = !selectedProperty || payment.property === selectedProperty;
+    const buildingMatch = !selectedBuilding || payment.building === selectedBuilding;
+    const searchMatch = !searchTerm || 
+      payment.tenant.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.property.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.building.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return yearMatch && monthMatch && statusMatch && tenantMatch && propertyMatch && buildingMatch && searchMatch;
+  });
+
+  const totalAmount = filteredPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  
+  const monthlyStats = months.map(month => {
+    const monthReceipts = receipts.filter(r => r.month === month && r.year === selectedYear);
+    const theoreticalIncome = monthReceipts.reduce((sum, r) => sum + (r.total || 0), 0);
+    
+    const monthPayments = filteredPayments.filter(p => p.month === month);
+    const realIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+    
+    return {
+      month,
+      theoreticalIncome,
+      realIncome,
+      count: monthPayments.length
+    };
+  });
+
+  const maxIncome = Math.max(...monthlyStats.map(s => s.theoreticalIncome), 1);
+
+  const clearFilters = () => {
+    setSelectedMonth('');
+    setSelectedStatus('');
+    setSelectedTenant('');
+    setSelectedProperty('');
+    setSelectedBuilding('');
+    setSearchTerm('');
   };
 
-  const months = useMemo(() => {
-    const monthSet = new Set<string>();
-    receipts.forEach((r) => {
-      const d = safeDate(r?.dueDate);
-      if (d) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        monthSet.add(`${year}-${month}`);
-      }
-    });
-    return Array.from(monthSet).sort().reverse();
-  }, [receipts]);
+  const getPaymentMethodLabel = (method: string) => {
+    const labels = {
+      efectivo: 'Efectivo',
+      transferencia: 'Transferencia',
+      dolares: 'Dólares'
+    };
+    return labels[method as keyof typeof labels] || method;
+  };
 
-  const filteredReceipts = useMemo(() => {
-    let result = (receipts ?? []).filter((receipt: any) => {
-      if (filterStatus !== 'all' && receipt?.status !== filterStatus) return false;
-
-      if (filterMonth !== 'all') {
-        const d = safeDate(receipt?.dueDate);
-        if (!d) return false;
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const receiptMonth = `${year}-${month}`;
-        if (receiptMonth !== filterMonth) return false;
-      }
-
-      return true;
-    });
-
-    // Ordenar
-    if (sortBy === 'date') {
-      result.sort((a, b) => {
-        const da = safeDate(a?.dueDate)?.getTime() ?? 0;
-        const db = safeDate(b?.dueDate)?.getTime() ?? 0;
-        return db - da;
-      });
-    } else if (sortBy === 'amount') {
-      result.sort((a, b) => (b?.total || 0) - (a?.total || 0));
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmado': return 'bg-green-100 text-green-800';
+      case 'pendiente_confirmacion': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
+  };
 
-    return result;
-  }, [receipts, filterStatus, filterMonth, sortBy]);
+  const viewReceipt = (payment: any) => {
+    if (payment.receipt) {
+      setSelectedReceipt(payment.receipt);
+      setShowReceiptModal(true);
+    }
+  };
 
-  const stats = useMemo(() => {
-    const paid = receipts.filter((r) => r?.status === 'pagado').reduce((sum, r) => sum + (r?.paidAmount || 0), 0);
-    const pending = receipts.filter((r) => r?.status === 'pendiente').reduce((sum, r) => sum + ((r?.total || 0) - (r?.paidAmount || 0)), 0);
-    const total = receipts.reduce((sum, r) => sum + (r?.total || 0), 0);
+  const printReceipt = (receipt: Receipt) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
 
-    return { paid, pending, total };
-  }, [receipts]);
+    const receiptHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Recibo ${receipt.receiptNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .receipt-info { margin-bottom: 20px; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+            .charges { border-collapse: collapse; width: 100%; margin: 20px 0; }
+            .charges th, .charges td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            .charges th { background-color: #f2f2f2; font-weight: bold; }
+            .total-row { background-color: #f9f9f9; font-weight: bold; }
+            .footer { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px; text-align: center; }
+            .building { color: #666; font-style: italic; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>RECIBO DE ALQUILER</h1>
+            <h2>${receipt.receiptNumber}</h2>
+          </div>
+          
+          <div class="receipt-info">
+            <div class="info-row">
+              <span><strong>Inquilino:</strong> ${receipt.tenant}</span>
+              <span><strong>Fecha de emisión:</strong> ${receipt.createdDate}</span>
+            </div>
+            <div class="info-row">
+              <span><strong>Propiedad:</strong> ${receipt.property}</span>
+              <span><strong>Fecha de vencimiento:</strong> ${receipt.dueDate}</span>
+            </div>
+            <div class="info-row">
+              <span class="building"><strong>Edificio:</strong> ${receipt.building}</span>
+              <span><strong>Período:</strong> ${receipt.month} ${receipt.year}</span>
+            </div>
+          </div>
 
-  const generateCSV = () => {
-    const headers = ['Fecha', 'Inquilino', 'Propiedad', 'Mes', 'Alquiler', 'Expensas', 'Total', 'Pagado', 'Pendiente', 'Estado'];
-    const rows = filteredReceipts.map((receipt) => [
-      receipt.dueDate || '-',
-      receipt.tenant,
-      receipt.property,
-      `${receipt.month} ${receipt.year}`,
-      receipt.rent,
-      receipt.expenses,
-      receipt.total,
-      receipt.paidAmount,
-      receipt.total - receipt.paidAmount,
-      receipt.status
-    ]);
+          <table class="charges">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th style="text-align: right;">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Alquiler</td>
+                <td style="text-align: right;">$${receipt.rent.toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td>Expensas</td>
+                <td style="text-align: right;">$${receipt.expenses.toLocaleString()}</td>
+              </tr>
+              ${receipt.previousBalance > 0 ? `
+                <tr>
+                  <td>Saldo anterior</td>
+                  <td style="text-align: right;">$${receipt.previousBalance.toLocaleString()}</td>
+                </tr>
+              ` : ''}
+              ${receipt.otherCharges.map(charge => `
+                <tr>
+                  <td>${charge.description}</td>
+                  <td style="text-align: right;">$${charge.amount.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td><strong>TOTAL A PAGAR</strong></td>
+                <td style="text-align: right;"><strong>${receipt.currency} $${receipt.total.toLocaleString()}</strong></td>
+              </tr>
+              ${receipt.paidAmount > 0 ? `
+                <tr>
+                  <td><strong>PAGADO</strong></td>
+                  <td style="text-align: right;"><strong>$${receipt.paidAmount.toLocaleString()}</strong></td>
+                </tr>
+              ` : ''}
+              ${receipt.remainingBalance > 0 ? `
+                <tr style="background-color: #fee2e2;">
+                  <td><strong>SALDO PENDIENTE</strong></td>
+                  <td style="text-align: right;"><strong>$${receipt.remainingBalance.toLocaleString()}</strong></td>
+                </tr>
+              ` : ''}
+            </tbody>
+          </table>
 
-    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          <div class="footer">
+            <p>Este recibo debe ser abonado antes del ${receipt.dueDate}</p>
+            <p>Gracias por su puntualidad en el pago</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(receiptHtml);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Fecha', 'Recibo', 'Inquilino', 'Propiedad', 'Edificio', 'Monto', 'Método', 'Estado'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredPayments.map(payment => [
+        payment.paymentDate,
+        payment.receiptNumber,
+        payment.tenant,
+        payment.property,
+        payment.building,
+        payment.amount,
+        getPaymentMethodLabel(payment.paymentMethod),
+        payment.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute('href', url);
-    link.setAttribute('download', `historial_pagos_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `historial_pagos_${selectedYear}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Historial de Pagos</h2>
-        <p className="text-gray-600">Registro completo de todos los recibos y pagos</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Historial de Pagos</h2>
+          <p className="text-gray-600">Consulta y analiza todos los pagos recibidos</p>
+        </div>
+        <button
+          onClick={exportToCSV}
+          className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Download className="h-5 w-5" />
+          <span>Exportar CSV</span>
+        </button>
       </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-600">Total Facturado</p>
-              <p className="text-3xl font-bold text-blue-900">${stats.total.toLocaleString()}</p>
-            </div>
-            <DollarSign className="h-12 w-12 text-blue-200" />
-          </div>
-        </div>
-
-        <div className="bg-green-50 rounded-xl p-6 border border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-600">Total Pagado</p>
-              <p className="text-3xl font-bold text-green-900">${stats.paid.toLocaleString()}</p>
-            </div>
-            <DollarSign className="h-12 w-12 text-green-200" />
-          </div>
-        </div>
-
-        <div className="bg-red-50 rounded-xl p-6 border border-red-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-red-600">Pendiente de Pago</p>
-              <p className="text-3xl font-bold text-red-900">${stats.pending.toLocaleString()}</p>
-            </div>
-            <DollarSign className="h-12 w-12 text-red-200" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center space-x-4">
+      {/* Search and Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
             <Filter className="h-5 w-5 text-gray-400" />
-
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Todos los Estados</option>
-              <option value="pagado">✓ Pagados</option>
-              <option value="pendiente">⏳ Pendientes</option>
-            </select>
-
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Todos los Meses</option>
-              {months.map((month) => (
-                <option key={month} value={month}>
-                  {month}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="date">Ordenar por Fecha</option>
-              <option value="amount">Ordenar por Monto</option>
-            </select>
+            <h3 className="text-lg font-semibold text-gray-900">Filtros Personalizados</h3>
           </div>
-
           <button
-            onClick={generateCSV}
-            className="flex items-center space-x-1 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm font-medium"
+            onClick={clearFilters}
+            className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
           >
-            <Download className="h-4 w-4" />
-            <span>Descargar CSV</span>
+            Limpiar filtros
           </button>
         </div>
+        
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por inquilino, propiedad, edificio o número de recibo..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Filter Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Año</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {uniqueYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mes</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todos los meses</option>
+              {months.map((month) => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Inquilino</label>
+            <select
+              value={selectedTenant}
+              onChange={(e) => setSelectedTenant(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todos los inquilinos</option>
+              {uniqueTenants.map((tenant) => (
+                <option key={tenant} value={tenant}>{tenant}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Propiedad</label>
+            <select
+              value={selectedProperty}
+              onChange={(e) => setSelectedProperty(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas las propiedades</option>
+              {uniqueProperties.map((property) => (
+                <option key={property} value={property}>{property}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Edificio</label>
+            <select
+              value={selectedBuilding}
+              onChange={(e) => setSelectedBuilding(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todos los edificios</option>
+              {uniqueBuildings.map((building) => (
+                <option key={building} value={building}>{building}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todos los estados</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="pendiente_confirmacion">Pendiente confirmación</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* Receipts Table */}
+      {/* Stats Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <DollarSign className="h-5 w-5 text-green-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Resumen de Filtros</h3>
+          </div>
+          <TrendingUp className="h-5 w-5 text-green-500" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center">
+            <p className="text-3xl font-bold text-gray-900">${totalAmount.toLocaleString()}</p>
+            <p className="text-sm text-gray-500">Total recaudado</p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-gray-900">{filteredPayments.length}</p>
+            <p className="text-sm text-gray-500">Pagos registrados</p>
+          </div>
+          <div className="text-center">
+            <p className="text-3xl font-bold text-gray-900">
+              ${filteredPayments.length > 0 ? Math.round(totalAmount / filteredPayments.length).toLocaleString() : '0'}
+            </p>
+            <p className="text-sm text-gray-500">Promedio por pago</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Chart */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Ingresos Mensuales {selectedYear}</h3>
+        
+        <div className="flex gap-6 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span className="text-sm text-gray-700">Ingreso Teórico</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span className="text-sm text-gray-700">Ingreso Real Cobrado</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-12 gap-3">
+          {monthlyStats.map((stat) => (
+            <div key={stat.month} className="text-center">
+              <div className="mb-2 flex gap-1 h-32 items-end justify-center">
+                <div
+                  className="bg-blue-500 rounded-t w-3"
+                  style={{
+                    height: `${Math.max((stat.theoreticalIncome / maxIncome) * 100, 5)}px`
+                  }}
+                  title={`Teórico: $${(stat.theoreticalIncome / 1000).toFixed(1)}k`}
+                ></div>
+                <div
+                  className="bg-green-500 rounded-t w-3"
+                  style={{
+                    height: `${Math.max((stat.realIncome / maxIncome) * 100, 5)}px`
+                  }}
+                  title={`Real: $${(stat.realIncome / 1000).toFixed(1)}k`}
+                ></div>
+              </div>
+              <p className="text-xs text-gray-600 mb-1">{stat.month.slice(0, 3)}</p>
+              <p className="text-xs font-semibold text-blue-600">${(stat.theoreticalIncome / 1000).toFixed(0)}k</p>
+              <p className="text-xs font-semibold text-green-600">${(stat.realIncome / 1000).toFixed(0)}k</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Payments Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -197,25 +449,22 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
                   Fecha
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Recibo
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Inquilino
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Propiedad
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Periodo
+                  Edificio
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Alquiler
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Monto
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Expensas
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Pagado
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Método
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Estado
@@ -223,52 +472,56 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredReceipts.map((receipt) => (
-                <tr
-                  key={receipt.id}
-                  className={`hover:bg-gray-50 ${receipt.status === 'pendiente' ? 'bg-yellow-50' : ''}`}
-                >
+              {[...filteredPayments].sort((a, b) => b.id - a.id).map((payment) => (
+                <tr key={payment.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center text-sm text-gray-900">
-                      <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                      {receipt.dueDate ? new Date(receipt.dueDate).toLocaleDateString('es-AR') : '-'}
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{payment.paymentDate}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {receipt.tenant}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {receipt.property}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {receipt.month} {receipt.year}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                    ${receipt.rent.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                    ${receipt.expenses.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
-                    ${receipt.total.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                    <span className={`font-semibold ${receipt.paidAmount > 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                      ${receipt.paidAmount.toLocaleString()}
-                    </span>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm font-medium text-gray-900">{payment.receiptNumber}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        receipt.status === 'pagado'
-                          ? 'bg-green-100 text-green-800'
-                          : receipt.status === 'pendiente'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {receipt.status === 'pagado' ? '✓ Pagado' : '⏳ Pendiente'}
+                    <span className="text-sm text-gray-900">{payment.tenant}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{payment.property}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-600">{payment.building}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm font-semibold text-gray-900">${payment.amount.toLocaleString()}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{getPaymentMethodLabel(payment.paymentMethod)}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}>
+                      {payment.status === 'confirmado' ? 'Confirmado' : 'Pendiente'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => viewReceipt(payment)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Ver recibo"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      {payment.receipt && (
+                        <button
+                          onClick={() => printReceipt(payment.receipt)}
+                          className="text-gray-400 hover:text-green-600 transition-colors"
+                          title="Imprimir recibo"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -277,11 +530,128 @@ const PaymentsHistory: React.FC<PaymentsHistoryProps> = ({ receipts }) => {
         </div>
       </div>
 
-      {filteredReceipts.length === 0 && (
+      {/* Receipt View Modal */}
+      {showReceiptModal && selectedReceipt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recibo {selectedReceipt.receiptNumber}</h3>
+              <button
+                onClick={() => {
+                  setShowReceiptModal(false);
+                  setSelectedReceipt(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="border border-gray-300 rounded-lg p-6 mb-4 bg-gray-50">
+              <div className="text-center mb-6 border-b-2 border-gray-800 pb-4">
+                <h1 className="text-2xl font-bold text-gray-900">RECIBO DE ALQUILER</h1>
+                <h2 className="text-xl font-semibold text-gray-700">{selectedReceipt.receiptNumber}</h2>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <p><strong>Inquilino:</strong> {selectedReceipt.tenant}</p>
+                  <p><strong>Propiedad:</strong> {selectedReceipt.property}</p>
+                  <p className="text-gray-600"><strong>Edificio:</strong> {selectedReceipt.building}</p>
+                </div>
+                <div>
+                  <p><strong>Fecha de emisión:</strong> {selectedReceipt.createdDate}</p>
+                  <p><strong>Fecha de vencimiento:</strong> {selectedReceipt.dueDate}</p>
+                  <p><strong>Período:</strong> {selectedReceipt.month} {selectedReceipt.year}</p>
+                </div>
+              </div>
+
+              <table className="w-full border-collapse border border-gray-300 mb-4">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="border border-gray-300 px-4 py-2 text-left">Concepto</th>
+                    <th className="border border-gray-300 px-4 py-2 text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="border border-gray-300 px-4 py-2">Alquiler</td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">${selectedReceipt.rent.toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-gray-300 px-4 py-2">Expensas</td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">${selectedReceipt.expenses.toLocaleString()}</td>
+                  </tr>
+                  {selectedReceipt.previousBalance > 0 && (
+                    <tr>
+                      <td className="border border-gray-300 px-4 py-2">Saldo anterior</td>
+                      <td className="border border-gray-300 px-4 py-2 text-right">${selectedReceipt.previousBalance.toLocaleString()}</td>
+                    </tr>
+                  )}
+                  {selectedReceipt.otherCharges.map((charge, index) => (
+                    <tr key={index}>
+                      <td className="border border-gray-300 px-4 py-2">{charge.description}</td>
+                      <td className="border border-gray-300 px-4 py-2 text-right">${charge.amount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-100 font-bold">
+                    <td className="border border-gray-300 px-4 py-2">TOTAL A PAGAR</td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">
+                      {selectedReceipt.currency} ${selectedReceipt.total.toLocaleString()}
+                    </td>
+                  </tr>
+                  {selectedReceipt.paidAmount > 0 && (
+                    <tr className="bg-green-50">
+                      <td className="border border-gray-300 px-4 py-2 font-semibold">PAGADO</td>
+                      <td className="border border-gray-300 px-4 py-2 text-right font-semibold text-green-600">
+                        ${selectedReceipt.paidAmount.toLocaleString()}
+                      </td>
+                    </tr>
+                  )}
+                  {selectedReceipt.remainingBalance > 0 && (
+                    <tr className="bg-red-50">
+                      <td className="border border-gray-300 px-4 py-2 font-semibold">SALDO PENDIENTE</td>
+                      <td className="border border-gray-300 px-4 py-2 text-right font-semibold text-red-600">
+                        ${selectedReceipt.remainingBalance.toLocaleString()}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <div className="text-center text-sm text-gray-600 border-t border-gray-300 pt-4">
+                <p>Este recibo debe ser abonado antes del {selectedReceipt.dueDate}</p>
+                <p>Gracias por su puntualidad en el pago</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowReceiptModal(false);
+                  setSelectedReceipt(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => printReceipt(selectedReceipt)}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Imprimir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {filteredPayments.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
           <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay recibos</h3>
-          <p className="text-gray-500">No hay recibos que coincidan con los filtros seleccionados.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay pagos registrados</h3>
+          <p className="text-gray-500">No se encontraron pagos para los filtros seleccionados.</p>
         </div>
       )}
     </div>
