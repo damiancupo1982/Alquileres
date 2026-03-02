@@ -361,7 +361,7 @@ function App() {
       </main>
 
       {/* Data Portability */}
-      <DataPortability />
+{/* <DataPortability /> */}
     </div>
   );
 }
