@@ -46,15 +46,32 @@ const getMonthName = (monthNum: number): string => {
   return months[monthNum] || '';
 };
 
-// Colores por edificio - MISMO ORDEN QUE TU IMAGEN
+// Colores por edificio
 const buildingColors: Record<string, string> = {
-  'Ramos Mejia': '#FFE0F0', // Rosa
-  'Limay': '#E0F0FF',        // Azul
-  'Bolivar': '#FFE8D0',      // Naranja
-  'Alvear': '#F0E0FF',       // Púrpura
-  'Faena': '#E0E8FF',        // Índigo
-  'Gaboto': '#E0FFE0',       // Verde
-  'Gazcon': '#FFFFE0',       // Amarillo
+  'Ramos Mejia': '#FFE0F0',
+  'Limay': '#E0F0FF',
+  'Bolivar': '#FFE8D0',
+  'Alvear': '#F0E0FF',
+  'Faena': '#E0E8FF',
+  'Gaboto': '#E0FFE0',
+  'Gazcon': '#FFFFE0',
+};
+
+// ORDEN EXACTO DE EDIFICIOS
+const buildingOrder = ['Ramos Mejia', 'Limay', 'Bolivar', 'Alvear', 'Faena', 'Gaboto', 'Gazcon'];
+
+// Calcular balance de un inquilino basado en receipts
+const calculateTenantBalance = (tenantName: string, receipts: Receipt[]): number => {
+  const tenantReceipts = (receipts ?? []).filter((r: any) => r?.tenant === tenantName);
+  
+  const totalOwed = tenantReceipts
+    .reduce((sum, r: any) => sum + (toNumberSafe(r?.total) || 0), 0);
+  
+  const totalPaid = tenantReceipts
+    .filter((r: any) => r?.status === 'pagado' || r?.status === 'confirmado')
+    .reduce((sum, r: any) => sum + toNumberSafe(r?.paidAmount), 0);
+  
+  return totalOwed - totalPaid;
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, setActiveTab }) => {
@@ -63,67 +80,43 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
   const [selectedReportMonth, setSelectedReportMonth] = useState(new Date().getMonth());
   const [selectedReportYear, setSelectedReportYear] = useState(new Date().getFullYear());
 
-  // DEBUG
-  useMemo(() => {
-    console.log('DEBUG Dashboard:', {
-      receiptsCount: receipts?.length,
-      tenantsCount: tenants?.length,
-      propertiesCount: properties?.length,
-      firstReceipt: receipts?.[0],
-      firstTenant: tenants?.[0],
-      firstProperty: properties?.[0],
-    });
-  }, [receipts, tenants, properties]);
-
-  // DEUDORES - filtrar inquilinos con balance > 0
+  // DEUDORES - Calcular balance correctamente desde receipts
   const debtorsList = useMemo(() => {
     return (tenants ?? [])
-      .filter((tenant: any) => {
-        const balance = toNumberSafe(tenant?.balance);
-        console.log(`Tenant ${tenant?.name}: balance=${balance}`);
-        return balance > 0;
+      .map((tenant: any) => {
+        const balance = calculateTenantBalance(tenant?.name, receipts);
+        return {
+          id: tenant?.id,
+          name: tenant?.name,
+          balance,
+        };
       })
-      .map((tenant: any) => ({
-        id: tenant?.id,
-        name: tenant?.name,
-        balance: toNumberSafe(tenant?.balance),
-      }))
+      .filter((t) => t.balance > 0)
       .sort((a, b) => b.balance - a.balance);
-  }, [tenants]);
+  }, [tenants, receipts]);
 
   const totalDebt = useMemo(() => {
-    const total = debtorsList.reduce((sum, d) => sum + d.balance, 0);
-    console.log('Total Debt:', total);
-    return total;
+    return debtorsList.reduce((sum, d) => sum + d.balance, 0);
   }, [debtorsList]);
 
-  // INGRESOS DEL MES - filtrar por createdDate (cuándo se registró el pago)
+  // INGRESOS DEL MES - Sumar pagos "pagado" del mes actual
   const monthlyIncome = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    console.log(`Calculando ingresos para mes=${currentMonth}, año=${currentYear}`);
-
-    const income = (receipts ?? [])
+    return (receipts ?? [])
       .filter((receipt: any) => {
         const createdDate = safeDate(receipt?.createdDate);
         if (!createdDate) return false;
-        const isCurrentMonth = createdDate.getMonth() === currentMonth && createdDate.getFullYear() === currentYear;
         const isPaid = receipt?.status === 'pagado' || receipt?.status === 'confirmado';
-        
-        console.log(`Receipt ${receipt?.receiptNumber}: createdDate=${receipt?.createdDate}, paidAmount=${receipt?.paidAmount}, status=${receipt?.status}, match=${isCurrentMonth && isPaid}`);
-        
-        return isCurrentMonth && isPaid;
+        return (
+          createdDate.getMonth() === currentMonth &&
+          createdDate.getFullYear() === currentYear &&
+          isPaid
+        );
       })
-      .reduce((sum: number, receipt: any) => {
-        const paid = toNumberSafe(receipt?.paidAmount);
-        console.log(`  Adding ${paid} from ${receipt?.tenant}`);
-        return sum + paid;
-      }, 0);
-
-    console.log('Monthly Income Total:', income);
-    return income;
+      .reduce((sum: number, receipt: any) => sum + toNumberSafe(receipt?.paidAmount), 0);
   }, [receipts]);
 
   // Propiedades ocupadas
@@ -189,69 +182,69 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
       }));
   }, [receipts]);
 
-  // Generar reporte mensual - RESPETANDO TU ESTRUCTURA EXACTA
+  // Generar reporte mensual - RESPETANDO ORDEN EXACTO
   const generateMonthlyReport = () => {
     const reportMonth = selectedReportMonth;
     const reportYear = selectedReportYear;
     const monthName = getMonthName(reportMonth);
 
-    // Obtener todos los recibos del mes/año seleccionado
+    // Obtener recibos del mes/año seleccionado
     const monthReceipts = (receipts ?? []).filter((receipt: any) => {
       const dueDate = safeDate(receipt?.dueDate);
       if (!dueDate) return false;
       return dueDate.getMonth() === reportMonth && dueDate.getFullYear() === reportYear;
     });
 
-    console.log(`Generando reporte para ${monthName} ${reportYear}. Recibos del mes: ${monthReceipts.length}`);
-
-    // Agrupar por edificio, manteniendo TODAS las propiedades en orden
-    const sortedProperties = [...(properties ?? [])].sort((a: any, b: any) => {
-      const buildingA = a?.building || 'Sin edificio';
-      const buildingB = b?.building || 'Sin edificio';
-      return buildingA.localeCompare(buildingB);
+    // Agrupar por edificio EN ORDEN
+    const reportData: Record<string, any[]> = {};
+    
+    buildingOrder.forEach((building) => {
+      reportData[building] = [];
     });
 
-    const reportData: Record<string, any[]> = {};
-    const buildingOrder: string[] = [];
+    // Iterar propiedades EN ORDEN (por edificio)
+    const sortedProperties = [...(properties ?? [])].sort((a: any, b: any) => {
+      const buildingAIndex = buildingOrder.indexOf(a?.building || 'Otro');
+      const buildingBIndex = buildingOrder.indexOf(b?.building || 'Otro');
+      return buildingAIndex - buildingBIndex;
+    });
 
     sortedProperties.forEach((prop: any) => {
-      const building = prop?.building || 'Sin edificio';
+      const building = prop?.building || 'Otro';
       if (!reportData[building]) {
         reportData[building] = [];
-        buildingOrder.push(building);
       }
 
-      // Buscar el inquilino de esta propiedad
+      // Buscar inquilino de esta propiedad
       const tenant = tenants?.find((t: any) => t?.propertyId === prop?.id);
-      
-      // Buscar recibos de este inquilino en el mes seleccionado
-      const propReceipts = monthReceipts.filter((r: any) => r?.tenant === tenant?.name);
 
-      // PAGO: suma de paidAmount en el mes
-      const paidAmount = propReceipts.reduce((sum, r: any) => sum + toNumberSafe(r?.paidAmount), 0);
-      
+      // PAGO: suma de paidAmount en el mes para este inquilino
+      const paidAmount = monthReceipts
+        .filter((r: any) => r?.tenant === tenant?.name)
+        .reduce((sum, r: any) => sum + toNumberSafe(r?.paidAmount), 0);
+
       // DEBE: balance actual del inquilino
-      const tenantDebt = tenant ? toNumberSafe(tenant?.balance) : 0;
+      const tenantBalance = tenant ? calculateTenantBalance(tenant?.name, receipts) : 0;
 
       reportData[building].push({
         propertyName: prop?.name,
         tenantName: tenant?.name || '-',
         paidAmount,
-        debt: tenantDebt,
+        debt: tenantBalance,
       });
     });
 
     // Calcular totales
     let totalPaid = 0;
     let totalDebt = 0;
-    Object.values(reportData).forEach((items) => {
-      items.forEach((item) => {
+    buildingOrder.forEach((building) => {
+      reportData[building].forEach((item) => {
         totalPaid += item.paidAmount;
         totalDebt += item.debt;
       });
     });
 
-    return { reportMonth, reportYear, monthName, reportData, buildingOrder, totalPaid, totalDebt };
+    return { reportMonth, reportYear, monthName, reportData, totalPaid, totalDebt };
   };
 
   const printReport = () => {
@@ -266,23 +259,21 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
         <title>Resumen ${report.monthName} ${report.reportYear}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 20px; }
-          .header { text-align: center; margin-bottom: 20px; }
-          .header-info { display: flex; gap: 40px; justify-content: center; margin: 10px 0; font-weight: bold; }
+          .header { text-align: center; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+          .header-item { text-align: center; }
+          .header h1 { margin: 0; font-size: 18px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
           th, td { border: 1px solid black; padding: 8px; text-align: left; }
           th { background-color: #ffff00; font-weight: bold; }
           .total-row { background-color: #ffff00; font-weight: bold; }
           .amount { text-align: right; }
-          .footer { margin-top: 40px; text-align: center; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>RESUMEN MENSUAL</h1>
-          <div class="header-info">
-            <div>MES <br/> <strong>${report.monthName.toUpperCase()}</strong></div>
-            <div>AÑO <br/> <strong>${report.reportYear}</strong></div>
-          </div>
+          <div class="header-item"><strong>MES</strong><br/>${report.monthName.toUpperCase()}</div>
+          <div class="header-item"><h1>RESUMEN MENSUAL</h1></div>
+          <div class="header-item"><strong>AÑO</strong><br/>${report.reportYear}</div>
         </div>
 
         <table>
@@ -298,18 +289,18 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
           <tbody>
     `;
 
-    report.buildingOrder.forEach((building) => {
-      const bgColor = buildingColors[building] || '#f0f0f0';
+    buildingOrder.forEach((building) => {
       const items = report.reportData[building];
+      const bgColor = buildingColors[building] || '#f0f0f0';
 
       items.forEach((item, index) => {
         reportHTML += `
           <tr>
-            ${index === 0 ? `<td rowspan="${items.length}" style="background-color: ${bgColor}; font-weight: bold;">${building}</td>` : ''}
-            <td>${item.tenantName}</td>
-            <td>${item.propertyName}</td>
-            <td class="amount">${item.paidAmount.toLocaleString()}</td>
-            <td class="amount">${item.debt.toLocaleString()}</td>
+            ${index === 0 ? `<td rowspan="${items.length}" style="background-color: ${bgColor}; font-weight: bold; border: 1px solid black;">${building}</td>` : ''}
+            <td style="border: 1px solid black;">${item.tenantName}</td>
+            <td style="border: 1px solid black;">${item.propertyName}</td>
+            <td class="amount" style="border: 1px solid black;">${item.paidAmount.toLocaleString()}</td>
+            <td class="amount" style="border: 1px solid black;">${item.debt.toLocaleString()}</td>
           </tr>
         `;
       });
@@ -320,17 +311,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
         </table>
 
         <div style="text-align: right; margin-top: 20px;">
-          <table style="width: 400px; margin-left: auto;">
-            <tr class="total-row">
-              <td style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">TOTAL</td>
-              <td class="amount" style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">${report.totalPaid.toLocaleString()}</td>
-              <td class="amount" style="background-color: #ffff00; font-weight: bold; border: 1px solid black;">${report.totalDebt.toLocaleString()}</td>
+          <table style="width: 400px; margin-left: auto; border-collapse: collapse;">
+            <tr style="background-color: #ffff00;">
+              <td style="border: 1px solid black; padding: 8px; font-weight: bold;">TOTAL</td>
+              <td class="amount" style="border: 1px solid black; padding: 8px; font-weight: bold;">${report.totalPaid.toLocaleString()}</td>
+              <td class="amount" style="border: 1px solid black; padding: 8px; font-weight: bold;">${report.totalDebt.toLocaleString()}</td>
             </tr>
           </table>
-        </div>
-
-        <div class="footer">
-          <p>Impreso: ${new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </body>
       </html>
@@ -543,22 +530,20 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
                 const report = generateMonthlyReport();
                 return (
                   <>
-                    {/* Header - TU FORMATO EXACTO */}
-                    <div className="flex justify-between items-center mb-6">
-                      <div>
-                        <span className="font-bold">MES</span><br/>
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 pb-6 border-b-2 border-black">
+                      <div className="text-center">
+                        <strong>MES</strong><br/>
                         <span className="text-lg">{report.monthName.toUpperCase()}</span>
                       </div>
+                      <h1 className="text-2xl font-bold">RESUMEN MENSUAL</h1>
                       <div className="text-center">
-                        <h1 className="text-2xl font-bold">RESUMEN MENSUAL</h1>
-                      </div>
-                      <div>
-                        <span className="font-bold">AÑO</span><br/>
+                        <strong>AÑO</strong><br/>
                         <span className="text-lg">{report.reportYear}</span>
                       </div>
                     </div>
 
-                    {/* Buildings Table - TU ESTRUCTURA EXACTA */}
+                    {/* Table */}
                     <div className="overflow-x-auto mb-6">
                       <table className="w-full border-collapse border border-black">
                         <thead>
@@ -571,13 +556,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
                           </tr>
                         </thead>
                         <tbody>
-                          {report.buildingOrder.map((building) => {
-                            const bgColor = buildingColors[building] || '#f0f0f0';
+                          {buildingOrder.map((building) => {
                             const items = report.reportData[building];
+                            const bgColor = buildingColors[building] || '#f0f0f0';
                             return items.map((item, idx) => (
-                              <tr
-                                key={`${building}-${idx}`}
-                              >
+                              <tr key={`${building}-${idx}`}>
                                 {idx === 0 && (
                                   <td
                                     rowSpan={items.length}
@@ -600,7 +583,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
 
                     {/* Totals */}
                     <div className="flex justify-end mb-6">
-                      <table className="border-collapse border border-black" style={{ width: '300px' }}>
+                      <table className="border-collapse border border-black">
                         <tbody>
                           <tr style={{ backgroundColor: '#ffff00' }}>
                             <td className="border border-black px-4 py-2 font-bold">TOTAL</td>
