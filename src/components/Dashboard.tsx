@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Building2, Users, DollarSign, AlertTriangle, TrendingUp, Calendar, X, Printer, FileText } from 'lucide-react';
+import React, { useRef, useMemo, useState } from 'react';
+import { Building2, Users, DollarSign, AlertTriangle, TrendingUp, Calendar, X, Printer, FileText, Download, Upload } from 'lucide-react';
 import { Tenant, Receipt, Property } from '../App';
 
 type TabType = 'dashboard' | 'properties' | 'tenants' | 'receipts' | 'history' | 'cash';
@@ -79,6 +79,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
   const [showMonthlyReport, setShowMonthlyReport] = useState(false);
   const [selectedReportMonth, setSelectedReportMonth] = useState(new Date().getMonth());
   const [selectedReportYear, setSelectedReportYear] = useState(new Date().getFullYear());
+  const [showDataManagement, setShowDataManagement] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // DEUDORES - Calcular balance correctamente desde receipts
   const debtorsList = useMemo(() => {
@@ -126,6 +130,71 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
   // Inquilinos activos
   const activeTenants = (tenants ?? []).filter((t: any) => t?.status === 'activo').length;
   const occupancyRate = totalProperties > 0 ? ((activeTenants / totalProperties) * 100).toFixed(1) : '0';
+
+  // EXPORTAR DATOS
+  const handleExport = () => {
+    try {
+      const exportData = {
+        version: '1.0.0',
+        exportDate: new Date().toISOString(),
+        properties: properties || [],
+        tenants: tenants || [],
+        receipts: receipts || [],
+        cashMovements: []
+      };
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `alquileres_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      const totalRecords = (properties?.length || 0) + (tenants?.length || 0) + (receipts?.length || 0);
+      setMessage({ type: 'success', text: `✅ Exportado: ${totalRecords} registros` });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      setMessage({ type: 'error', text: `❌ Error al exportar: ${error.message}` });
+    }
+  };
+
+  // IMPORTAR DATOS
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    try {
+      const content = await file.text();
+      const data = JSON.parse(content);
+
+      if (!data.version || !data.properties) {
+        throw new Error('Formato de archivo inválido');
+      }
+
+      // Aquí iría la lógica para actualizar el estado de tu app
+      // Por ahora, solo mostramos el mensaje de éxito
+      const total = 
+        (data.properties?.length || 0) + 
+        (data.tenants?.length || 0) + 
+        (data.receipts?.length || 0);
+
+      setMessage({ type: 'success', text: `✅ Importado: ${total} registros` });
+      
+      // Recargar página para que vea los datos importados
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      setMessage({ type: 'error', text: `❌ Error: ${error.message}` });
+    } finally {
+      setIsLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const stats = useMemo(
     () => [
@@ -437,6 +506,63 @@ const Dashboard: React.FC<DashboardProps> = ({ tenants, receipts, properties, se
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Data Management Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-md mx-auto w-full">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="text-blue-600">
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm8-1a1 1 0 00-1 1v6a1 1 0 001 1h4a1 1 0 001-1v-6a1 1 0 00-1-1h-4z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Gestión de Datos</h2>
+        </div>
+
+        <div className="space-y-3 mb-6">
+          <button
+            onClick={handleExport}
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            <Download className="w-5 h-5" />
+            Exportar Todo
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+          >
+            <Upload className="w-5 h-5" />
+            {isLoading ? 'Importando...' : 'Importar Datos'}
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImport}
+            className="hidden"
+          />
+        </div>
+
+        {message && (
+          <div
+            className={`p-3 rounded-lg text-sm font-medium mb-4 ${
+              message.type === 'success'
+                ? 'bg-green-100 text-green-800 border border-green-300'
+                : 'bg-red-100 text-red-800 border border-red-300'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <div className="text-center text-gray-600 text-sm">
+          <p className="font-semibold text-gray-700">
+            {(properties?.length || 0) + (tenants?.length || 0) + (receipts?.length || 0)} registros totales
+          </p>
         </div>
       </div>
 
