@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Plus, User, Phone, Mail, Calendar, Edit, Trash2, Eye, Filter, Download, Eye as EyeIcon } from 'lucide-react';
 import PaymentsHistory from './components/PaymentsHistory';
 import TenantDetailModal from './components/TenantDetailModal';
-import TenantDetailModal from './TenantDetailModal';
 
 interface TenantsManagerProps {
   tenants: Tenant[];
