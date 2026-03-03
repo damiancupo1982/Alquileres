@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Plus,
   Building2,
@@ -10,13 +10,18 @@ import {
   Filter,
   Home,
   Users as UsersIcon,
+  AlertCircle,
+  Loader,
 } from 'lucide-react';
-import { Property } from '../App';
+import {
+  subscribeToProperties,
+  addProperty,
+  updateProperty,
+  deleteProperty,
+  Property,
+} from '../services/propertyService';
 
-interface PropertiesManagerProps {
-  properties: Property[];
-  setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
-}
+interface PropertiesManagerProps {}
 
 const safeText = (v: unknown, fallback = '') => {
   const s = String(v ?? '').trim();
@@ -42,13 +47,20 @@ const toNumberSafe = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const safeMoney = (v: unknown) => toNumberSafe(v).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+const safeMoney = (v: unknown) =>
+  toNumberSafe(v).toLocaleString('es-AR', { maximumFractionDigits: 0 });
 
-const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setProperties }) => {
+const PropertiesManager: React.FC<PropertiesManagerProps> = () => {
+  const [properties, setProperties] = useState<Property[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'all' | 'disponible' | 'ocupado' | 'mantenimiento'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'disponible' | 'ocupado' | 'mantenimiento'>(
+    'all'
+  );
   const [viewMode, setViewMode] = useState<'grid' | 'building'>('grid');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -63,46 +75,76 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     notes: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Suscribirse a cambios en tiempo real
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = subscribeToProperties(
+      (props) => {
+        setProperties(props);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        setError('Error al cargar propiedades. Intenta recargar la página.');
+        setLoading(false);
+      }
+    );
 
-    const newProperty: Property = {
-      id: editingProperty ? editingProperty.id : Date.now(),
-      name: safeText(formData.name),
-      type: formData.type,
-      building: safeText(formData.building),
-      address: safeText(formData.address),
-      rent: toNumberSafe(formData.rent),
-      expenses: toNumberSafe(formData.expenses),
-      nextUpdateDate: formData.nextUpdateDate || '',
-      tenant: editingProperty?.tenant || null,
-      status: editingProperty?.status || 'disponible',
-      contractStart: formData.contractStart || '',
-      contractEnd: formData.contractEnd || '',
-      lastUpdated: new Date().toISOString().split('T')[0],
-      notes: formData.notes || '',
+    return () => {
+      if (unsubscribe) unsubscribe();
     };
+  }, []);
 
-    if (editingProperty) {
-      setProperties(properties.map((p) => (p.id === editingProperty.id ? newProperty : p)));
-    } else {
-      setProperties([...properties, newProperty]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const propertyData: Omit<Property, 'id'> = {
+        name: safeText(formData.name),
+        type: formData.type,
+        building: safeText(formData.building),
+        address: safeText(formData.address),
+        rent: toNumberSafe(formData.rent),
+        expenses: toNumberSafe(formData.expenses),
+        nextUpdateDate: formData.nextUpdateDate || '',
+        tenant: null,
+        status: editingProperty?.status || 'disponible',
+        contractStart: formData.contractStart || '',
+        contractEnd: formData.contractEnd || '',
+        lastUpdated: new Date().toISOString().split('T')[0],
+        notes: formData.notes || '',
+      };
+
+      if (editingProperty) {
+        // Actualizar propiedad existente
+        await updateProperty(editingProperty.id, propertyData);
+      } else {
+        // Agregar nueva propiedad
+        await addProperty(propertyData);
+      }
+
+      // Limpiar formulario
+      setFormData({
+        name: '',
+        type: 'departamento',
+        building: '',
+        address: '',
+        rent: '',
+        expenses: '',
+        nextUpdateDate: '',
+        contractStart: '',
+        contractEnd: '',
+        notes: '',
+      });
+      setShowModal(false);
+      setEditingProperty(null);
+    } catch (err) {
+      setError('Error al guardar la propiedad. Intenta nuevamente.');
+      console.error(err);
+    } finally {
+      setSubmitting(false);
     }
-
-    setFormData({
-      name: '',
-      type: 'departamento',
-      building: '',
-      address: '',
-      rent: '',
-      expenses: '',
-      nextUpdateDate: '',
-      contractStart: '',
-      contractEnd: '',
-      notes: '',
-    });
-    setShowModal(false);
-    setEditingProperty(null);
   };
 
   const handleEdit = (property: Property) => {
@@ -122,9 +164,17 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm('¿Está seguro de eliminar esta propiedad?')) {
-      setProperties(properties.filter((p) => p.id !== id));
+      try {
+        setSubmitting(true);
+        await deleteProperty(id);
+      } catch (err) {
+        setError('Error al eliminar la propiedad. Intenta nuevamente.');
+        console.error(err);
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -174,6 +224,14 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
 
   return (
     <div className="space-y-6">
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2" />
+          {error}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -197,7 +255,8 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             setEditingProperty(null);
             setShowModal(true);
           }}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={submitting}
+          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           <Plus className="h-5 w-5" />
           <span>Agregar Propiedad</span>
@@ -214,7 +273,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
               <button
                 onClick={() => setFilterStatus('all')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  filterStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  filterStatus === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Todas ({properties.length})
@@ -232,7 +293,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
               <button
                 onClick={() => setFilterStatus('ocupado')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  filterStatus === 'ocupado' ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  filterStatus === 'ocupado'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Ocupadas ({getStatusCount('ocupado')})
@@ -256,7 +319,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             <button
               onClick={() => setViewMode('grid')}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Home className="h-4 w-4 inline mr-1" />
@@ -265,7 +330,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             <button
               onClick={() => setViewMode('building')}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'building' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'building'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Building2 className="h-4 w-4 inline mr-1" />
@@ -275,8 +342,16 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Cargando propiedades...</span>
+        </div>
+      )}
+
       {/* Properties Display - Grid View */}
-      {viewMode === 'grid' ? (
+      {!loading && viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProperties.map((property: any) => (
             <div
@@ -286,9 +361,13 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{safeText(property?.name, 'Sin nombre')}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {safeText(property?.name, 'Sin nombre')}
+                    </h3>
                     <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
-                    <p className="text-sm text-blue-600 font-medium">{safeText(property?.building, 'Sin edificio')}</p>
+                    <p className="text-sm text-blue-600 font-medium">
+                      {safeText(property?.building, 'Sin edificio')}
+                    </p>
                   </div>
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
@@ -312,7 +391,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Expensas</p>
-                      <p className="font-semibold text-gray-900">${safeMoney(property?.expenses)}</p>
+                      <p className="font-semibold text-gray-900">
+                        ${safeMoney(property?.expenses)}
+                      </p>
                     </div>
                   </div>
 
@@ -346,7 +427,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     </div>
                   )}
 
-                  <div className="text-xs text-gray-500">Actualizado: {safeText(property?.lastUpdated, '-')}</div>
+                  <div className="text-xs text-gray-500">
+                    Actualizado: {safeText(property?.lastUpdated, '-')}
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-2 mt-6 pt-4 border-t border-gray-100">
@@ -355,13 +438,15 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                   </button>
                   <button
                     onClick={() => handleEdit(property)}
-                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                    disabled={submitting}
+                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
                   >
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(property.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                    disabled={submitting}
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -370,7 +455,7 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             </div>
           ))}
         </div>
-      ) : (
+      ) : !loading && viewMode === 'building' ? (
         /* Building View */
         <div className="space-y-6">
           {Object.entries(propertiesByBuilding).map(([building, buildingProperties]) => (
@@ -382,8 +467,11 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">{building}</h3>
                       <p className="text-sm text-gray-500">
-                        {buildingProperties.length} propiedades • {buildingProperties.filter((p: any) => p?.status === 'ocupado').length} ocupadas •{' '}
-                        {buildingProperties.filter((p: any) => p?.status === 'disponible').length} disponibles
+                        {buildingProperties.length} propiedades •{' '}
+                        {buildingProperties.filter((p: any) => p?.status === 'ocupado').length}{' '}
+                        ocupadas •{' '}
+                        {buildingProperties.filter((p: any) => p?.status === 'disponible').length}{' '}
+                        disponibles
                       </p>
                     </div>
                   </div>
@@ -394,7 +482,8 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     </span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                       <Home className="h-3 w-3 mr-1" />
-                      {buildingProperties.filter((p: any) => p?.status === 'disponible').length} disponibles
+                      {buildingProperties.filter((p: any) => p?.status === 'disponible').length}{' '}
+                      disponibles
                     </span>
                   </div>
                 </div>
@@ -409,7 +498,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <h4 className="font-medium text-gray-900">{safeText(property?.name, 'Sin nombre')}</h4>
+                          <h4 className="font-medium text-gray-900">
+                            {safeText(property?.name, 'Sin nombre')}
+                          </h4>
                           <p className="text-sm text-gray-500">{getTypeLabel(property?.type)}</p>
                         </div>
                         <span
@@ -450,13 +541,15 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                         </button>
                         <button
                           onClick={() => handleEdit(property)}
-                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                          disabled={submitting}
+                          className="p-1 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(property.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                          disabled={submitting}
+                          className="p-1 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -468,14 +561,16 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
-      {filteredProperties.length === 0 && (
+      {!loading && filteredProperties.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
           <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay propiedades</h3>
           <p className="text-gray-500">
-            {filterStatus === 'all' ? 'No hay propiedades registradas.' : `No hay propiedades con estado "${filterStatus}".`}
+            {filterStatus === 'all'
+              ? 'No hay propiedades registradas.'
+              : `No hay propiedades con estado "${filterStatus}".`}
           </p>
         </div>
       )}
@@ -505,7 +600,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
                   <select
                     value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as Property['type'] })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, type: e.target.value as Property['type'] })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="departamento">Departamento</option>
@@ -548,7 +645,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Alquiler ($)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Alquiler ($)
+                  </label>
                   <input
                     type="number"
                     value={formData.rent}
@@ -559,7 +658,9 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Expensas ($)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Expensas ($)
+                  </label>
                   <input
                     type="number"
                     value={formData.expenses}
@@ -570,27 +671,37 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Próxima actualización de valores</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Próxima actualización de valores
+                  </label>
                   <input
                     type="date"
                     value={formData.nextUpdateDate}
-                    onChange={(e) => setFormData({ ...formData, nextUpdateDate: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nextUpdateDate: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Inicio de contrato</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Inicio de contrato
+                  </label>
                   <input
                     type="date"
                     value={formData.contractStart}
-                    onChange={(e) => setFormData({ ...formData, contractStart: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, contractStart: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fin de contrato</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fin de contrato
+                  </label>
                   <input
                     type="date"
                     value={formData.contractEnd}
@@ -618,11 +729,17 @@ const PropertiesManager: React.FC<PropertiesManagerProps> = ({ properties, setPr
                     setShowModal(false);
                     setEditingProperty(null);
                   }}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={submitting}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+                >
+                  {submitting && <Loader className="h-4 w-4 animate-spin mr-2" />}
                   {editingProperty ? 'Actualizar' : 'Agregar'}
                 </button>
               </div>
